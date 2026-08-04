@@ -1,0 +1,212 @@
+<script>
+  var STATE = { config: { leadStages: [], customerStages: [], priorities: [] }, leads: [], customers: [], todos: [] };
+
+  document.addEventListener('DOMContentLoaded', function () { refreshAll(); });
+
+  function showStatus(msg, isError) {
+    var el = document.getElementById('statusBanner');
+    el.textContent = msg;
+    el.style.display = 'block';
+    el.style.color = isError ? '#d93025' : '#5f6368';
+    setTimeout(function () { el.style.display = 'none'; }, 3500);
+  }
+
+  function refreshAll() {
+    showStatus('Loading...');
+    google.script.run
+      .withSuccessHandler(function (data) {
+        STATE = data;
+        renderLeads();
+        renderCustomers();
+        renderTodos();
+        showStatus('Up to date.');
+      })
+      .withFailureHandler(function (err) { showStatus('Error: ' + err.message, true); })
+      .getDashboardData();
+  }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === tab); });
+    document.querySelectorAll('.panel').forEach(function (p) { p.classList.toggle('active', p.id === 'panel-' + tab); });
+  }
+
+  function toggleForm(id) {
+    var el = document.getElementById(id);
+    el.classList.toggle('active');
+    if (id === 'leadForm' && el.classList.contains('active')) populateStageOptions('lead-Stage', STATE.config.leadStages);
+    if (id === 'customerForm' && el.classList.contains('active')) populateStageOptions('cust-Stage', STATE.config.customerStages);
+  }
+
+  function populateStageOptions(selectId, stages) {
+    var sel = document.getElementById(selectId);
+    if (sel.options.length) return;
+    stages.forEach(function (s) {
+      var opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      sel.appendChild(opt);
+    });
+  }
+
+  function esc(s) {
+    return (s === null || s === undefined) ? '' : String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function stageSelect(id, current, stages, onchangeFn) {
+    var opts = stages.map(function (s) {
+      return '<option value="' + esc(s) + '"' + (s === current ? ' selected' : '') + '>' + esc(s) + '</option>';
+    }).join('');
+    return '<select class="stage-select" onchange="' + onchangeFn + '(\'' + id + '\', this.value)">' + opts + '</select>';
+  }
+
+  // ---------- LEADS ----------
+  function renderLeads() {
+    var wrap = document.getElementById('leadsTableWrap');
+    if (!STATE.leads.length) { wrap.innerHTML = '<div class="empty-state">No leads yet. Click "+ New Lead" to add one.</div>'; return; }
+    var rows = STATE.leads.map(function (l) {
+      return '<tr>' +
+        '<td><strong>' + esc(l.Name) + '</strong><br><span class="reason">' + esc(l.Company) + '</span></td>' +
+        '<td>' + esc(l.Email) + '<br>' + esc(l.Phone) + '</td>' +
+        '<td>' + stageSelect(l.ID, l.Stage, STATE.config.leadStages, 'onLeadStageChange') + '</td>' +
+        '<td>' + (l.Value ? Number(l.Value).toLocaleString() : '') + '</td>' +
+        '<td>' + esc(l.Owner) + '</td>' +
+        '<td>' + esc(l.NextFollowUpDate) + '</td>' +
+        '<td><button class="btn danger small" onclick="onDeleteLead(\'' + l.ID + '\')">Delete</button></td>' +
+        '</tr>';
+    }).join('');
+    wrap.innerHTML = '<table><thead><tr><th>Name / Company</th><th>Contact</th><th>Stage</th><th>Value</th><th>Owner</th><th>Next Follow-up</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  function submitLead() {
+    var name = document.getElementById('lead-Name').value.trim();
+    if (!name) { showStatus('Lead name is required.', true); return; }
+    var form = {
+      Name: name,
+      Company: document.getElementById('lead-Company').value,
+      Email: document.getElementById('lead-Email').value,
+      Phone: document.getElementById('lead-Phone').value,
+      Source: document.getElementById('lead-Source').value,
+      Stage: document.getElementById('lead-Stage').value || 'New',
+      Value: document.getElementById('lead-Value').value,
+      Owner: document.getElementById('lead-Owner').value,
+      Notes: document.getElementById('lead-Notes').value
+    };
+    google.script.run
+      .withSuccessHandler(function () { toggleForm('leadForm'); refreshAll(); showStatus('Lead added.'); })
+      .withFailureHandler(function (err) { showStatus('Error: ' + err.message, true); })
+      .addLead(form);
+  }
+
+  function onLeadStageChange(id, newStage) {
+    google.script.run
+      .withSuccessHandler(function () { refreshAll(); showStatus('Stage updated - task list refreshed.'); })
+      .withFailureHandler(function (err) { showStatus('Error: ' + err.message, true); })
+      .updateLeadStage(id, newStage);
+  }
+
+  function onDeleteLead(id) {
+    if (!confirm('Delete this lead?')) return;
+    google.script.run
+      .withSuccessHandler(function () { refreshAll(); })
+      .withFailureHandler(function (err) { showStatus('Error: ' + err.message, true); })
+      .deleteLead(id);
+  }
+
+  // ---------- CUSTOMERS ----------
+  function renderCustomers() {
+    var wrap = document.getElementById('customersTableWrap');
+    if (!STATE.customers.length) { wrap.innerHTML = '<div class="empty-state">No customers yet.</div>'; return; }
+    var rows = STATE.customers.map(function (c) {
+      return '<tr>' +
+        '<td><strong>' + esc(c.Name) + '</strong><br><span class="reason">' + esc(c.Company) + '</span></td>' +
+        '<td>' + esc(c.Email) + '<br>' + esc(c.Phone) + '</td>' +
+        '<td>' + stageSelect(c.ID, c.Stage, STATE.config.customerStages, 'onCustomerStageChange') + '</td>' +
+        '<td>' + (c.LifetimeValue ? Number(c.LifetimeValue).toLocaleString() : '') + '</td>' +
+        '<td>' + esc(c.Owner) + '</td>' +
+        '<td><button class="btn danger small" onclick="onDeleteCustomer(\'' + c.ID + '\')">Delete</button></td>' +
+        '</tr>';
+    }).join('');
+    wrap.innerHTML = '<table><thead><tr><th>Name / Company</th><th>Contact</th><th>Stage</th><th>Lifetime Value</th><th>Owner</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  function submitCustomer() {
+    var name = document.getElementById('cust-Name').value.trim();
+    if (!name) { showStatus('Customer name is required.', true); return; }
+    var form = {
+      Name: name,
+      Company: document.getElementById('cust-Company').value,
+      Email: document.getElementById('cust-Email').value,
+      Phone: document.getElementById('cust-Phone').value,
+      Stage: document.getElementById('cust-Stage').value || 'New',
+      LifetimeValue: document.getElementById('cust-LifetimeValue').value,
+      Owner: document.getElementById('cust-Owner').value,
+      Notes: document.getElementById('cust-Notes').value
+    };
+    google.script.run
+      .withSuccessHandler(function () { toggleForm('customerForm'); refreshAll(); showStatus('Customer added.'); })
+      .withFailureHandler(function (err) { showStatus('Error: ' + err.message, true); })
+      .addCustomer(form);
+  }
+
+  function onCustomerStageChange(id, newStage) {
+    google.script.run
+      .withSuccessHandler(function () { refreshAll(); showStatus('Stage updated - task list refreshed.'); })
+      .withFailureHandler(function (err) { showStatus('Error: ' + err.message, true); })
+      .updateCustomerStage(id, newStage);
+  }
+
+  function onDeleteCustomer(id) {
+    if (!confirm('Delete this customer?')) return;
+    google.script.run
+      .withSuccessHandler(function () { refreshAll(); })
+      .withFailureHandler(function (err) { showStatus('Error: ' + err.message, true); })
+      .deleteCustomer(id);
+  }
+
+  // ---------- TODOS ----------
+  function renderTodos() {
+    var wrap = document.getElementById('todosListWrap');
+    if (!STATE.todos.length) { wrap.innerHTML = '<div class="empty-state">Nothing on your to-do list.</div>'; return; }
+    var items = STATE.todos.map(function (t) {
+      var done = t.Status === 'Done';
+      return '<div class="todo-item' + (done ? ' done' : '') + '">' +
+        '<input type="checkbox"' + (done ? ' checked' : '') + ' onchange="onToggleTodo(\'' + t.ID + '\', this.checked)">' +
+        '<div class="todo-body">' +
+          '<div class="todo-text">' + esc(t.Task) + '</div>' +
+          (t.Reason ? '<span class="reason">Why: ' + esc(t.Reason) + '</span>' : '') +
+          '<div class="todo-meta">' +
+            '<span class="badge priority-' + esc(t.Priority) + '">' + esc(t.Priority) + '</span>' +
+            (t.DueDate ? '<span>Due ' + esc(t.DueDate) + '</span>' : '') +
+            (t.RelatedName ? '<span>' + esc(t.RelatedType) + ': ' + esc(t.RelatedName) + '</span>' : '') +
+            (t.AutoGenerated === 'Y' ? '<span class="auto-tag">Auto-recommended</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '</div>';
+    }).join('');
+    wrap.innerHTML = items;
+  }
+
+  function submitTodo() {
+    var task = document.getElementById('todo-Task').value.trim();
+    if (!task) { showStatus('Task text is required.', true); return; }
+    var form = {
+      Task: task,
+      DueDate: document.getElementById('todo-DueDate').value,
+      Priority: document.getElementById('todo-Priority').value,
+      RelatedType: 'General'
+    };
+    google.script.run
+      .withSuccessHandler(function () { toggleForm('todoForm'); refreshAll(); showStatus('Task added.'); })
+      .withFailureHandler(function (err) { showStatus('Error: ' + err.message, true); })
+      .addTodo(form);
+  }
+
+  function onToggleTodo(id, checked) {
+    var fn = checked ? 'completeTodo' : 'reopenTodo';
+    google.script.run
+      .withSuccessHandler(function () { refreshAll(); })
+      .withFailureHandler(function (err) { showStatus('Error: ' + err.message, true); })
+      [fn](id);
+  }
+</script>

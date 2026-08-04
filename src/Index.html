@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Stylesheet'); ?>
+</head>
+<body>
+  <header class="app-header">
+    <h1><span>Lead</span> &amp; Customer Manager</h1>
+    <button class="btn secondary" id="refreshBtn" onclick="refreshAll()">Refresh</button>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="leads" onclick="switchTab('leads')">Leads</button>
+    <button class="tab-btn" data-tab="customers" onclick="switchTab('customers')">Customers</button>
+    <button class="tab-btn" data-tab="todos" onclick="switchTab('todos')">To-Do List</button>
+  </nav>
+
+  <div id="statusBanner" class="status-banner" style="display:none;"></div>
+
+  <main>
+    <!-- LEADS -->
+    <section class="panel active" id="panel-leads">
+      <div class="toolbar">
+        <h2>Leads</h2>
+        <button class="btn" onclick="toggleForm('leadForm')">+ New Lead</button>
+      </div>
+
+      <div class="form-overlay" id="leadForm">
+        <div class="form-grid">
+          <div><label>Name *</label><input id="lead-Name"></div>
+          <div><label>Company</label><input id="lead-Company"></div>
+          <div><label>Email</label><input id="lead-Email"></div>
+          <div><label>Phone</label><input id="lead-Phone"></div>
+          <div><label>Source</label><input id="lead-Source" placeholder="Referral, Website, Ads..."></div>
+          <div><label>Stage</label>
+            <select id="lead-Stage"></select>
+          </div>
+          <div><label>Estimated Value</label><input id="lead-Value" type="number"></div>
+          <div><label>Owner (email)</label><input id="lead-Owner"></div>
+          <div class="full"><label>Notes</label><textarea id="lead-Notes"></textarea></div>
+        </div>
+        <div class="form-actions">
+          <button class="btn" onclick="submitLead()">Save Lead</button>
+          <button class="btn secondary" onclick="toggleForm('leadForm')">Cancel</button>
+        </div>
+      </div>
+
+      <div class="card"><div id="leadsTableWrap"></div></div>
+    </section>
+
+    <!-- CUSTOMERS -->
+    <section class="panel" id="panel-customers">
+      <div class="toolbar">
+        <h2>Customers</h2>
+        <button class="btn" onclick="toggleForm('customerForm')">+ New Customer</button>
+      </div>
+
+      <div class="form-overlay" id="customerForm">
+        <div class="form-grid">
+          <div><label>Name *</label><input id="cust-Name"></div>
+          <div><label>Company</label><input id="cust-Company"></div>
+          <div><label>Email</label><input id="cust-Email"></div>
+          <div><label>Phone</label><input id="cust-Phone"></div>
+          <div><label>Stage</label>
+            <select id="cust-Stage"></select>
+          </div>
+          <div><label>Lifetime Value</label><input id="cust-LifetimeValue" type="number"></div>
+          <div><label>Owner (email)</label><input id="cust-Owner"></div>
+          <div class="full"><label>Notes</label><textarea id="cust-Notes"></textarea></div>
+        </div>
+        <div class="form-actions">
+          <button class="btn" onclick="submitCustomer()">Save Customer</button>
+          <button class="btn secondary" onclick="toggleForm('customerForm')">Cancel</button>
+        </div>
+      </div>
+
+      <div class="card"><div id="customersTableWrap"></div></div>
+    </section>
+
+    <!-- TODOS -->
+    <section class="panel" id="panel-todos">
+      <div class="toolbar">
+        <h2>To-Do List</h2>
+        <button class="btn" onclick="toggleForm('todoForm')">+ New Task</button>
+      </div>
+
+      <div class="form-overlay" id="todoForm">
+        <div class="form-grid">
+          <div class="full"><label>Task *</label><input id="todo-Task"></div>
+          <div><label>Due Date</label><input id="todo-DueDate" type="date"></div>
+          <div><label>Priority</label>
+            <select id="todo-Priority">
+              <option>High</option><option selected>Medium</option><option>Low</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn" onclick="submitTodo()">Add Task</button>
+          <button class="btn secondary" onclick="toggleForm('todoForm')">Cancel</button>
+        </div>
+      </div>
+
+      <div class="card"><div id="todosListWrap"></div></div>
+    </section>
+  </main>
+
+  <?!= include('JavaScript'); ?>
+</body>
+</html>

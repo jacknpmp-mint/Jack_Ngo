@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head><base target="_top">
+<?!= include('Stylesheet'); ?>
+<style>body{padding:16px;background:#fff;} .form-grid{grid-template-columns:1fr;}</style>
+</head>
+<body>
+  <div class="form-grid">
+    <div><label>Name *</label><input id="s-Name"></div>
+    <div><label>Company</label><input id="s-Company"></div>
+    <div><label>Email</label><input id="s-Email"></div>
+    <div><label>Phone</label><input id="s-Phone"></div>
+    <div><label>Stage</label>
+      <select id="s-Stage">
+        <option>New</option><option>Active</option><option>VIP</option><option>At Risk</option><option>Churned</option>
+      </select>
+    </div>
+    <div><label>Lifetime Value</label><input id="s-LifetimeValue" type="number"></div>
+    <div><label>Notes</label><textarea id="s-Notes"></textarea></div>
+  </div>
+  <div class="form-actions">
+    <button class="btn" onclick="save()">Save Customer</button>
+  </div>
+  <div id="msg" class="reason" style="margin-top:10px;"></div>
+
+  <script>
+    function save() {
+      var name = document.getElementById('s-Name').value.trim();
+      if (!name) { document.getElementById('msg').textContent = 'Name is required.'; return; }
+      var form = {
+        Name: name,
+        Company: document.getElementById('s-Company').value,
+        Email: document.getElementById('s-Email').value,
+        Phone: document.getElementById('s-Phone').value,
+        Stage: document.getElementById('s-Stage').value,
+        LifetimeValue: document.getElementById('s-LifetimeValue').value,
+        Notes: document.getElementById('s-Notes').value
+      };
+      google.script.run
+        .withSuccessHandler(function () {
+          document.getElementById('msg').textContent = 'Customer saved.';
+          ['Name','Company','Email','Phone','LifetimeValue','Notes'].forEach(function(f){ document.getElementById('s-'+f).value=''; });
+        })
+        .withFailureHandler(function (err) { document.getElementById('msg').textContent = 'Error: ' + err.message; })
+        .addCustomer(form);
+    }
+  </script>
+</body>
+</html>
