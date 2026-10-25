@@ -1,0 +1,1503 @@
+{
+ "app": {
+  "name": "LSB CRM · Bidding · Project",
+  "brand": "LSB CRM",
+  "subtitle": [
+   "CRM · Đấu thầu · Dự án",
+   "CRM · Bidding · Projects"
+  ],
+  "version": "3.0.0",
+  "schemaVersion": "LSB_CRM_Bidding_Project_DB_v4.6",
+  "menuTitle": "LSB App",
+  "timezone": "Asia/Ho_Chi_Minh",
+  "alertDays": 7,
+  "consts": {
+   "FX_USD_VND": 26000,
+   "TRANSIT_DAYS": 14
+  }
+ },
+ "features": {
+  "AUTH": true,
+  "ACTIVITY": true,
+  "ALERTS": true,
+  "VIEW360": true
+ },
+ "staff": {
+  "table": "LSB_Staff",
+  "id": "Staff_id",
+  "email": "Email",
+  "name": "Full_name",
+  "access": "Access_level",
+  "active": "Active",
+  "role": "Role"
+ },
+ "catalogs": [
+  "LSB_Staff",
+  "LSB_Task"
+ ],
+ "tables": {
+  "LSB_Lead": {
+   "label": [
+    "Lead",
+    "Lead"
+   ],
+   "prefix": "LD",
+   "idStyle": "year",
+   "display": "Company_name",
+   "labelCols": [
+    "Company_name"
+   ],
+   "listCols": [
+    "Lead_id",
+    "Company_name",
+    "Nation",
+    "Lead_source",
+    "Owner_id",
+    "Created_day",
+    "Lead_status"
+   ],
+   "parentFk": "",
+   "dateCol": "Created_day",
+   "view360": true,
+   "required": [],
+   "need": [
+    "Company_name",
+    "Lead_status"
+   ],
+   "unique": [],
+   "pct": {},
+   "range": {},
+   "url": [
+    "Lead_website"
+   ],
+   "email": [
+    "Contact_email"
+   ],
+   "long": [],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {},
+   "groupCol": ""
+  },
+  "LSB_Lead_Qualifying": {
+   "label": [
+    "Đánh giá lead",
+    "Lead qualification"
+   ],
+   "prefix": "QL",
+   "idStyle": "year",
+   "display": "Task_duty",
+   "labelCols": [
+    "Qualification_id",
+    "Task_duty"
+   ],
+   "listCols": [
+    "Qualification_id",
+    "Lead_id",
+    "Task_id",
+    "Task_duty",
+    "Qual_Due_day",
+    "Qual_Status",
+    "Assessor_id"
+   ],
+   "parentFk": "Lead_id",
+   "dateCol": "Qual_Start_day",
+   "view360": false,
+   "required": [
+    "Lead_id",
+    "Task_id"
+   ],
+   "need": [
+    "Qual_Start_day"
+   ],
+   "unique": [],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {},
+   "groupCol": ""
+  },
+  "LSB_Quotation": {
+   "label": [
+    "Báo giá",
+    "Quotation"
+   ],
+   "prefix": "QT",
+   "idStyle": "year",
+   "display": "Project_name",
+   "labelCols": [
+    "Quotation_LSB_Code",
+    "Project_name"
+   ],
+   "listCols": [
+    "Quotation_code",
+    "Quotation_LSB_Code",
+    "Lead_id",
+    "Project_name",
+    "Value_USD",
+    "Issue_day",
+    "Win_probability",
+    "Status"
+   ],
+   "parentFk": "Lead_id",
+   "dateCol": "Issue_day",
+   "view360": true,
+   "required": [
+    "Lead_id"
+   ],
+   "need": [
+    "Quotation_LSB_Code",
+    "Project_name",
+    "Value_USD",
+    "Issue_day",
+    "Status"
+   ],
+   "unique": [
+    "Quotation_LSB_Code"
+   ],
+   "pct": {
+    "Win_probability": [
+     0,
+     1
+    ]
+   },
+   "range": {
+    "Revision_no": [
+     0,
+     99
+    ]
+   },
+   "url": [],
+   "email": [],
+   "long": [
+    "Address",
+    "Scope"
+   ],
+   "money": [
+    "Value_USD",
+    "Value_VND"
+   ],
+   "calc": {
+    "Value_VND": {
+     "type": "mul",
+     "src": "Value_USD",
+     "by": "FX_USD_VND"
+    }
+   },
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {},
+   "groupCol": ""
+  },
+  "LSB_Bidding_strategy": {
+   "label": [
+    "Chiến lược thầu",
+    "Bidding strategy"
+   ],
+   "prefix": "BS",
+   "idStyle": "year",
+   "display": "Win_theme",
+   "labelCols": [
+    "Strategy_id",
+    "Win_theme"
+   ],
+   "listCols": [
+    "Strategy_id",
+    "Quotation_code",
+    "Price_positioning",
+    "Win_theme",
+    "Key_competitors"
+   ],
+   "parentFk": "Quotation_code",
+   "dateCol": "",
+   "view360": false,
+   "required": [
+    "Quotation_code"
+   ],
+   "need": [
+    "Price_positioning"
+   ],
+   "unique": [
+    "Quotation_code"
+   ],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [
+    "Value_proposition",
+    "Strengths",
+    "Weaknesses",
+    "Key_competitors",
+    "Win_theme",
+    "Approach"
+   ],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {},
+   "groupCol": ""
+  },
+  "LSB_Bidding_action_plan": {
+   "label": [
+    "Kế hoạch hành động thầu",
+    "Bid action plan"
+   ],
+   "prefix": "BA",
+   "idStyle": "year",
+   "display": "Task_duty",
+   "labelCols": [
+    "Action_id",
+    "Task_duty"
+   ],
+   "listCols": [
+    "Action_id",
+    "Lead_id",
+    "Quotation_code",
+    "Task_id",
+    "Task_duty",
+    "Owner_id",
+    "Due_day",
+    "Status"
+   ],
+   "parentFk": "Lead_id",
+   "dateCol": "Start_day",
+   "view360": false,
+   "required": [
+    "Lead_id",
+    "Task_id"
+   ],
+   "need": [
+    "Start_day"
+   ],
+   "unique": [],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {},
+   "groupCol": ""
+  },
+  "LSB_Result_Lesson": {
+   "label": [
+    "Kết quả & bài học thầu",
+    "Bid result & lesson"
+   ],
+   "prefix": "RL",
+   "idStyle": "year",
+   "display": "Result",
+   "labelCols": [
+    "Result_id",
+    "Result"
+   ],
+   "listCols": [
+    "Result_id",
+    "Quotation_code",
+    "Result",
+    "Result_day",
+    "Winner",
+    "Win_loss_reason",
+    "Project_id"
+   ],
+   "parentFk": "Quotation_code",
+   "dateCol": "Result_day",
+   "view360": false,
+   "required": [
+    "Quotation_code"
+   ],
+   "need": [
+    "Result",
+    "Result_day",
+    "Win_loss_reason"
+   ],
+   "unique": [
+    "Quotation_code"
+   ],
+   "pct": {
+    "Price_gap_pct": [
+     -1,
+     1
+    ]
+   },
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [
+    "What_went_well",
+    "To_improve",
+    "Next_time_action"
+   ],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {
+    "Project_id": "tùy chọn — dự án hình thành từ báo giá thắng (v4.6: chọn tay)",
+    "Price_gap_pct": "chênh giá so với đơn vị thắng (0.05 = 5%)"
+   },
+   "groupCol": ""
+  },
+  "LSB_Customer": {
+   "label": [
+    "Khách hàng",
+    "Customer"
+   ],
+   "prefix": "CU",
+   "idStyle": "catalog",
+   "display": "Company_name",
+   "labelCols": [
+    "Company_name"
+   ],
+   "listCols": [
+    "Customer_id",
+    "Company_name",
+    "Lead_id",
+    "Nation",
+    "Contact",
+    "First_contract_day",
+    "Account_owner_id"
+   ],
+   "parentFk": "Lead_id",
+   "dateCol": "First_contract_day",
+   "view360": true,
+   "required": [
+    "Lead_id"
+   ],
+   "need": [],
+   "unique": [
+    "Lead_id"
+   ],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [
+    "Address"
+   ],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {},
+   "groupCol": ""
+  },
+  "LSB_project": {
+   "label": [
+    "Dự án",
+    "Project"
+   ],
+   "prefix": "PJ",
+   "idStyle": "year",
+   "display": "Project_name",
+   "labelCols": [
+    "Project_code",
+    "Project_name"
+   ],
+   "listCols": [
+    "Project_id",
+    "Project_code",
+    "Project_name",
+    "Customer_id",
+    "Contract_USD",
+    "Contract_day",
+    "PM_id",
+    "Status"
+   ],
+   "parentFk": "Customer_id",
+   "dateCol": "Contract_day",
+   "view360": true,
+   "required": [
+    "Customer_id"
+   ],
+   "need": [
+    "Project_name",
+    "Status"
+   ],
+   "unique": [
+    "Quotation_LSB-Code"
+   ],
+   "pct": {
+    "Grossmargin_EST": [
+     -1,
+     1
+    ],
+    "Grossmargin_Actual": [
+     -1,
+     1
+    ]
+   },
+   "range": {
+    "RAD_Revision": [
+     0,
+     99
+    ]
+   },
+   "url": [
+    "URL_Project_data"
+   ],
+   "email": [],
+   "long": [
+    "Project_address"
+   ],
+   "money": [
+    "Contract_USD",
+    "Contract_VND"
+   ],
+   "calc": {
+    "Contract_VND": {
+     "type": "mul",
+     "src": "Contract_USD",
+     "by": "FX_USD_VND"
+    }
+   },
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {},
+   "groupCol": ""
+  },
+  "LSB_Project_task": {
+   "label": [
+    "Đầu việc dự án",
+    "Project task"
+   ],
+   "prefix": "PT",
+   "idStyle": "year",
+   "display": "Task_duty",
+   "labelCols": [
+    "Project_task_id",
+    "Task_duty"
+   ],
+   "listCols": [
+    "Project_task_id",
+    "Project_id",
+    "Task_id",
+    "Task_duty",
+    "Owner_id",
+    "Due_day",
+    "Status"
+   ],
+   "parentFk": "Project_id",
+   "dateCol": "Start_day",
+   "view360": false,
+   "required": [
+    "Project_id",
+    "Task_id"
+   ],
+   "need": [
+    "Start_day"
+   ],
+   "unique": [],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {},
+   "groupCol": ""
+  },
+  "LSB_shipment": {
+   "label": [
+    "Lô hàng",
+    "Shipment"
+   ],
+   "prefix": "SH",
+   "idStyle": "year",
+   "display": "Shipment_code",
+   "labelCols": [
+    "Shipment_no",
+    "Shipment_code"
+   ],
+   "listCols": [
+    "Shipping_id",
+    "Project_id",
+    "Shipment_no",
+    "Shipment_code",
+    "Quantity_ton",
+    "ETD_plan",
+    "ETD_actual",
+    "ETA_plan"
+   ],
+   "parentFk": "Project_id",
+   "dateCol": "ETD_plan",
+   "view360": true,
+   "required": [
+    "Project_id"
+   ],
+   "need": [],
+   "unique": [],
+   "pct": {},
+   "range": {
+    "Shipment_no": [
+     1,
+     999
+    ]
+   },
+   "url": [],
+   "email": [],
+   "long": [],
+   "money": [],
+   "calc": {
+    "ETA_plan": {
+     "type": "addDays",
+     "src": "ETD_plan",
+     "by": "TRANSIT_DAYS"
+    },
+    "ETA_actual": {
+     "type": "addDays",
+     "src": "ETD_actual",
+     "by": "TRANSIT_DAYS"
+    }
+   },
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {},
+   "groupCol": ""
+  },
+  "LSB_Project_handover_lesson": {
+   "label": [
+    "Bài học dự án",
+    "Project lesson"
+   ],
+   "prefix": "PL",
+   "idStyle": "year",
+   "display": "Issue_description",
+   "labelCols": [
+    "Lesson_id",
+    "Category"
+   ],
+   "listCols": [
+    "Lesson_id",
+    "Project_id",
+    "Shipping_id",
+    "Handover_day",
+    "Phase",
+    "Category",
+    "Issue_description"
+   ],
+   "parentFk": "Project_id",
+   "dateCol": "Handover_day",
+   "view360": false,
+   "required": [
+    "Project_id"
+   ],
+   "need": [
+    "Handover_day"
+   ],
+   "unique": [],
+   "pct": {},
+   "range": {
+    "Customer_feedback": [
+     1,
+     5
+    ]
+   },
+   "url": [],
+   "email": [],
+   "long": [
+    "Issue_description",
+    "Root_cause",
+    "What_went_well",
+    "To_improve",
+    "Action_next_project"
+   ],
+   "money": [
+    "Impact_USD"
+   ],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {},
+   "groupCol": ""
+  },
+  "LSB_payment_plan": {
+   "label": [
+    "Kế hoạch thanh toán",
+    "Payment milestone"
+   ],
+   "prefix": "PP",
+   "idStyle": "year",
+   "display": "Payment_code",
+   "labelCols": [
+    "PaymentPlan_id",
+    "Payment_code"
+   ],
+   "listCols": [
+    "PaymentPlan_id",
+    "Project_id",
+    "Shipping_id",
+    "Payment_code",
+    "Payment_pct",
+    "Payment_USD",
+    "Due_day",
+    "Pay_status"
+   ],
+   "parentFk": "Project_id",
+   "dateCol": "Due_day",
+   "view360": true,
+   "required": [
+    "Project_id"
+   ],
+   "need": [
+    "Payment_code",
+    "Payment_USD",
+    "Due_day"
+   ],
+   "unique": [],
+   "pct": {
+    "Payment_pct": [
+     0,
+     1
+    ]
+   },
+   "range": {
+    "PP_revision": [
+     0,
+     99
+    ]
+   },
+   "url": [],
+   "email": [],
+   "long": [
+    "Required_docs"
+   ],
+   "money": [
+    "Payment_USD",
+    "Payment_VND",
+    "Collected_USD",
+    "Balance_USD"
+   ],
+   "calc": {
+    "Payment_VND": {
+     "type": "mul",
+     "src": "Payment_USD",
+     "by": "FX_USD_VND"
+    }
+   },
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {},
+   "groupCol": ""
+  },
+  "LSB_paid": {
+   "label": [
+    "Tiền đã thu",
+    "Payment received"
+   ],
+   "prefix": "PD",
+   "idStyle": "year",
+   "display": "Invoice_no",
+   "labelCols": [
+    "Paid_id",
+    "Invoice_no"
+   ],
+   "listCols": [
+    "Paid_id",
+    "PaymentPlan_id",
+    "Invoice_no",
+    "Invoice_day",
+    "Paid_USD",
+    "Payment_day"
+   ],
+   "parentFk": "PaymentPlan_id",
+   "dateCol": "Payment_day",
+   "view360": false,
+   "required": [
+    "PaymentPlan_id"
+   ],
+   "need": [
+    "Paid_USD",
+    "Payment_day"
+   ],
+   "unique": [],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [],
+   "money": [
+    "Paid_USD",
+    "Paid_VND"
+   ],
+   "calc": {
+    "Paid_VND": {
+     "type": "mul",
+     "src": "Paid_USD",
+     "by": "FX_USD_VND"
+    }
+   },
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {},
+   "groupCol": ""
+  },
+  "LSB_cost": {
+   "label": [
+    "Chi phí",
+    "Cost"
+   ],
+   "prefix": "CO",
+   "idStyle": "year",
+   "display": "Vendor",
+   "labelCols": [
+    "Cost_id",
+    "Vendor"
+   ],
+   "listCols": [
+    "Cost_id",
+    "Project_id",
+    "Category",
+    "Vendor",
+    "Cost_USD",
+    "Invoice_no",
+    "Payment_day",
+    "Cost_status"
+   ],
+   "parentFk": "Project_id",
+   "dateCol": "Payment_day",
+   "view360": false,
+   "required": [
+    "Project_id"
+   ],
+   "need": [
+    "Category",
+    "Cost_USD"
+   ],
+   "unique": [],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [],
+   "money": [
+    "Cost_USD",
+    "Cost_VND"
+   ],
+   "calc": {
+    "Cost_VND": {
+     "type": "mul",
+     "src": "Cost_USD",
+     "by": "FX_USD_VND"
+    }
+   },
+   "types": {
+    "Invoice_no": "string"
+   },
+   "fk": {},
+   "soft": [],
+   "notes": {
+    "Year": "auto từ Payment_day",
+    "Quarter": "auto từ Payment_day"
+   },
+   "groupCol": ""
+  },
+  "LSB_Staff": {
+   "label": [
+    "Nhân sự",
+    "Staff"
+   ],
+   "prefix": "ST",
+   "idStyle": "catalog",
+   "display": "Full_name",
+   "labelCols": [
+    "Full_name"
+   ],
+   "listCols": [
+    "Staff_id",
+    "Full_name",
+    "Role",
+    "Email",
+    "Access_level",
+    "Active"
+   ],
+   "parentFk": "",
+   "dateCol": "",
+   "view360": false,
+   "required": [
+    "Full_name",
+    "Email",
+    "Access_level",
+    "Active"
+   ],
+   "need": [],
+   "unique": [
+    "Email"
+   ],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [
+    "Email"
+   ],
+   "long": [],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {},
+   "groupCol": ""
+  },
+  "LSB_Task": {
+   "label": [
+    "Đầu việc chuẩn",
+    "Standard task"
+   ],
+   "prefix": "TK",
+   "idStyle": "catalog",
+   "display": "Task_duty",
+   "labelCols": [
+    "Task_id",
+    "Task_duty"
+   ],
+   "listCols": [
+    "Task_id",
+    "Phase",
+    "Task_duty",
+    "Default_role",
+    "Std_duration_days",
+    "Active"
+   ],
+   "parentFk": "",
+   "dateCol": "",
+   "view360": false,
+   "required": [
+    "Phase",
+    "Task_duty"
+   ],
+   "need": [],
+   "unique": [],
+   "pct": {},
+   "range": {
+    "Std_duration_days": [
+     0,
+     3650
+    ]
+   },
+   "url": [
+    "Task_SOP"
+   ],
+   "email": [],
+   "long": [],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {},
+   "groupCol": "Phase"
+  }
+ },
+ "menu": [
+  {
+   "group": [
+    "Bán hàng & thầu",
+    "Sales & bidding"
+   ],
+   "items": [
+    {
+     "table": "LSB_Lead",
+     "icon": "◎"
+    },
+    {
+     "table": "LSB_Lead_Qualifying",
+     "icon": "✓"
+    },
+    {
+     "table": "LSB_Quotation",
+     "icon": "₫"
+    },
+    {
+     "table": "LSB_Bidding_strategy",
+     "icon": "♟"
+    },
+    {
+     "table": "LSB_Bidding_action_plan",
+     "icon": "☰"
+    },
+    {
+     "table": "LSB_Result_Lesson",
+     "icon": "★"
+    }
+   ]
+  },
+  {
+   "group": [
+    "Khách hàng & dự án",
+    "Customers & projects"
+   ],
+   "items": [
+    {
+     "table": "LSB_Customer",
+     "icon": "◉"
+    },
+    {
+     "table": "LSB_project",
+     "icon": "▣"
+    },
+    {
+     "table": "LSB_Project_task",
+     "icon": "☑"
+    },
+    {
+     "table": "LSB_shipment",
+     "icon": "⛴"
+    },
+    {
+     "table": "LSB_Project_handover_lesson",
+     "icon": "✎"
+    }
+   ]
+  },
+  {
+   "group": [
+    "Tài chính",
+    "Finance"
+   ],
+   "items": [
+    {
+     "table": "LSB_payment_plan",
+     "icon": "▤"
+    },
+    {
+     "table": "LSB_paid",
+     "icon": "$"
+    },
+    {
+     "table": "LSB_cost",
+     "icon": "↘"
+    }
+   ]
+  },
+  {
+   "group": [
+    "Danh mục",
+    "Catalogs"
+   ],
+   "items": [
+    {
+     "table": "LSB_Staff",
+     "icon": "☺"
+    },
+    {
+     "table": "LSB_Task",
+     "icon": "▦"
+    }
+   ]
+  }
+ ],
+ "dateOrder": [
+  [
+   "Start_day",
+   "Due_day"
+  ],
+  [
+   "Start_day",
+   "Done_day"
+  ],
+  [
+   "Qual_Start_day",
+   "Qual_Due_day"
+  ],
+  [
+   "Qual_Start_day",
+   "Qual_Done_day"
+  ],
+  [
+   "Start_Fab",
+   "Completed_Fab"
+  ],
+  [
+   "ETD_plan",
+   "ETA_plan"
+  ],
+  [
+   "ETD_actual",
+   "ETA_actual"
+  ],
+  [
+   "Contract_day",
+   "Kickoff_day"
+  ],
+  [
+   "Installation_date_start",
+   "Project_handover"
+  ]
+ ],
+ "alerts": [
+  {
+   "table": "LSB_Lead_Qualifying",
+   "date": "Qual_Due_day",
+   "title": [],
+   "warnDays": 3,
+   "doneCol": "Qual_Status",
+   "doneValues": [
+    "Done"
+   ],
+   "doneWhen": "",
+   "ownerCol": "Assessor_id",
+   "link": "Lead_id"
+  },
+  {
+   "table": "LSB_Bidding_action_plan",
+   "date": "Due_day",
+   "title": [],
+   "warnDays": 3,
+   "doneCol": "Status",
+   "doneValues": [
+    "Done"
+   ],
+   "doneWhen": "",
+   "ownerCol": "Owner_id",
+   "link": "Lead_id"
+  },
+  {
+   "table": "LSB_Project_task",
+   "date": "Due_day",
+   "title": [],
+   "warnDays": 3,
+   "doneCol": "Status",
+   "doneValues": [
+    "Done"
+   ],
+   "doneWhen": "",
+   "ownerCol": "Owner_id",
+   "link": "Project_id"
+  },
+  {
+   "table": "LSB_payment_plan",
+   "date": "Due_day",
+   "title": [],
+   "warnDays": 7,
+   "doneCol": "",
+   "doneValues": [],
+   "doneWhen": "",
+   "ownerCol": "",
+   "link": "Project_id"
+  },
+  {
+   "table": "LSB_shipment",
+   "date": "ETD_plan",
+   "title": [
+    "ETD lô hàng",
+    "Shipment ETD"
+   ],
+   "warnDays": 7,
+   "doneCol": "",
+   "doneValues": [],
+   "doneWhen": "ETD_actual",
+   "ownerCol": "",
+   "link": "Project_id"
+  },
+  {
+   "table": "LSB_project",
+   "date": "RAD_date",
+   "title": [
+    "Hạn giao RAD",
+    "RAD deadline"
+   ],
+   "warnDays": 14,
+   "doneCol": "Status",
+   "doneValues": [
+    "Closed",
+    "Installation Completed"
+   ],
+   "doneWhen": "",
+   "ownerCol": "PM_id",
+   "link": ""
+  }
+ ],
+ "dashboard": {
+  "kpiTables": [
+   "LSB_Lead",
+   "LSB_Quotation",
+   "LSB_Customer",
+   "LSB_project",
+   "LSB_shipment",
+   "LSB_payment_plan"
+  ],
+  "metrics": [],
+  "providers": [
+   "Lsb_board_"
+  ]
+ },
+ "needExtra": {},
+ "autoUser": {
+  "LSB_Lead": [
+   "Owner_id"
+  ],
+  "LSB_Lead_Qualifying": [
+   "Assessor_id"
+  ],
+  "LSB_Quotation": [
+   "Sales_id"
+  ],
+  "LSB_Bidding_action_plan": [
+   "Owner_id"
+  ],
+  "LSB_Project_handover_lesson": [
+   "Recorded_by"
+  ]
+ },
+ "defaults": {
+  "LSB_Lead": {
+   "Lead_status": "New"
+  },
+  "LSB_Lead_Qualifying": {
+   "Qual_Status": "Not started"
+  },
+  "LSB_Quotation": {
+   "Status": "Draft"
+  },
+  "LSB_Bidding_action_plan": {
+   "Status": "Not started"
+  },
+  "LSB_Project_task": {
+   "Status": "Not started"
+  },
+  "LSB_project": {
+   "Status": "Kick-off"
+  },
+  "LSB_cost": {
+   "Cost_status": "Planned"
+  }
+ },
+ "providers": {
+  "hooks": [
+   "Lsb_hooks_"
+  ],
+  "routes": [
+   "Lsb_routes_"
+  ],
+  "related": [
+   "Lsb_related_"
+  ],
+  "extra360": [
+   "Lsb_extra360_"
+  ],
+  "alerts": [],
+  "checks": [
+   "Lsb_checks_"
+  ]
+ },
+ "labels": {
+  "columns": {
+   "Qualification_id": [
+    "Mã đánh giá",
+    "Qualification ID"
+   ],
+   "Qual_Start_day": [
+    "Ngày bắt đầu",
+    "Start date"
+   ],
+   "Qual_Due_day": [
+    "Hạn",
+    "Due date"
+   ],
+   "Qual_Done_day": [
+    "Ngày xong",
+    "Done date"
+   ],
+   "Qual_Status": [
+    "Trạng thái việc",
+    "Task status"
+   ],
+   "Assessor_id": [
+    "Người đánh giá",
+    "Assessor"
+   ],
+   "Quotation_code": [
+    "Mã báo giá",
+    "Quotation ID"
+   ],
+   "Quotation_LSB_Code": [
+    "Mã báo giá nội bộ",
+    "Internal quotation code"
+   ],
+   "Scope": [
+    "Phạm vi",
+    "Scope"
+   ],
+   "Area_m2": [
+    "Diện tích (m²)",
+    "Area (m²)"
+   ],
+   "Tonnage": [
+    "Khối lượng (tấn)",
+    "Tonnage"
+   ],
+   "Value_USD": [
+    "Giá trị (USD)",
+    "Value (USD)"
+   ],
+   "Value_VND": [
+    "Giá trị (VND)",
+    "Value (VND)"
+   ],
+   "Quotation_owner": [
+    "Chủ đầu tư",
+    "Project owner"
+   ],
+   "Quotation_Maincons": [
+    "Tổng thầu",
+    "Main contractor"
+   ],
+   "Quotation_Consultant": [
+    "Tư vấn",
+    "Consultant"
+   ],
+   "Issue_day": [
+    "Ngày phát hành",
+    "Issue date"
+   ],
+   "Revision_no": [
+    "Lần sửa giá",
+    "Revision"
+   ],
+   "Win_probability": [
+    "Khả năng thắng",
+    "Win probability"
+   ],
+   "Sales_id": [
+    "Sales phụ trách",
+    "Sales"
+   ],
+   "Sale_Assistant_id": [
+    "Sales Assistant",
+    "Sales assistant"
+   ],
+   "Strategy_id": [
+    "Mã chiến lược",
+    "Strategy ID"
+   ],
+   "Price_positioning": [
+    "Định vị giá",
+    "Price positioning"
+   ],
+   "Value_proposition": [
+    "Giá trị đề xuất",
+    "Value proposition"
+   ],
+   "Strengths": [
+    "Điểm mạnh",
+    "Strengths"
+   ],
+   "Weaknesses": [
+    "Điểm yếu",
+    "Weaknesses"
+   ],
+   "Key_competitors": [
+    "Đối thủ chính",
+    "Key competitors"
+   ],
+   "Win_theme": [
+    "Thông điệp thắng thầu",
+    "Win theme"
+   ],
+   "Approach": [
+    "Cách tiếp cận",
+    "Approach"
+   ],
+   "Action_id": [
+    "Mã hành động",
+    "Action ID"
+   ],
+   "Stage": [
+    "Giai đoạn thầu",
+    "Bid stage"
+   ],
+   "Result_id": [
+    "Mã kết quả",
+    "Result ID"
+   ],
+   "Result": [
+    "Kết quả",
+    "Result"
+   ],
+   "Result_day": [
+    "Ngày có kết quả",
+    "Result date"
+   ],
+   "Winner": [
+    "Đơn vị thắng",
+    "Winner"
+   ],
+   "Price_gap_pct": [
+    "Chênh giá",
+    "Price gap"
+   ],
+   "Win_loss_reason": [
+    "Lý do thắng/thua",
+    "Win/loss reason"
+   ],
+   "Next_time_action": [
+    "Hành động lần sau",
+    "Next-time action"
+   ],
+   "Invoice_no": [
+    "Số hóa đơn",
+    "Invoice no."
+   ],
+   "LSB_Bidding_action_plan.Status": [
+    "Trạng thái việc",
+    "Task status"
+   ],
+   "LSB_Project_task.Status": [
+    "Trạng thái việc",
+    "Task status"
+   ],
+   "LSB_Quotation.Status": [
+    "Trạng thái báo giá",
+    "Quotation status"
+   ],
+   "LSB_project.Status": [
+    "Trạng thái dự án",
+    "Project status"
+   ],
+   "LSB_Quotation.Address": [
+    "Địa chỉ công trình",
+    "Site address"
+   ],
+   "LSB_Result_Lesson.Category": [
+    "Nhóm bài học",
+    "Lesson category"
+   ],
+   "LSB_paid.Payment_day": [
+    "Ngày nhận tiền",
+    "Received on"
+   ],
+   "LSB_cost.Payment_day": [
+    "Ngày trả",
+    "Paid on"
+   ],
+   "LSB_cost.Category": [
+    "Nhóm chi phí",
+    "Cost category"
+   ],
+   "LSB_Project_handover_lesson.Category": [
+    "Nhóm bài học",
+    "Lesson category"
+   ],
+   "LSB_Task.Task_id": [
+    "Mã đầu việc chuẩn",
+    "Standard task ID"
+   ]
+  },
+  "notesEn": {
+   "LSB_Bidding_action_plan.Lead_id": "required",
+   "LSB_Bidding_action_plan.Quotation_code": "optional — fill in once a quotation exists",
+   "LSB_Bidding_action_plan.Stage": "auto: blank Quotation_code → Qualify, filled → Quotation",
+   "LSB_Bidding_action_plan.Task_duty": "auto lookup from Task_id",
+   "LSB_Bidding_strategy.Quotation_code": "unique (1–1)",
+   "LSB_Customer.Company_name": "auto-copied from the Lead on conversion",
+   "LSB_Customer.Lead_id": "unique (1 lead → at most 1 customer)",
+   "LSB_Lead.Lead_website": "Company website URL",
+   "LSB_Lead.Owner_id": "Sales owner",
+   "LSB_Lead.Quarter": "auto from Created_day",
+   "LSB_Lead.Year": "auto from Created_day",
+   "LSB_Lead_Qualifying.Assessor_id": "assessor",
+   "LSB_Lead_Qualifying.Qual_Done_day": "actual completion date",
+   "LSB_Lead_Qualifying.Qual_Due_day": "due date",
+   "LSB_Lead_Qualifying.Qual_Start_day": "start date",
+   "LSB_Lead_Qualifying.Qualification_id": "QL-2026-001 — one row per lead-qualification task",
+   "LSB_Lead_Qualifying.Task_duty": "auto lookup from Task_id",
+   "LSB_Lead_Qualifying.Task_id": "standard task (Phase = Lead Qualification)",
+   "LSB_Project_handover_lesson.Action_next_project": "action to apply on the next project",
+   "LSB_Project_handover_lesson.Customer_feedback": "customer score 1–5 at handover",
+   "LSB_Project_handover_lesson.Handover_day": "handover / closing date",
+   "LSB_Project_handover_lesson.Impact_USD": "estimated loss / saving",
+   "LSB_Project_handover_lesson.Impact_days": "days late / early",
+   "LSB_Project_handover_lesson.Issue_description": "what happened / issue",
+   "LSB_Project_handover_lesson.Quarter": "auto from Handover_day",
+   "LSB_Project_handover_lesson.Shipping_id": "optional — lesson linked to a shipment",
+   "LSB_Project_handover_lesson.Year": "auto from Handover_day",
+   "LSB_Project_task.Phase": "auto lookup from Task_id",
+   "LSB_Project_task.Task_duty": "auto lookup from Task_id",
+   "LSB_Quotation.Address": "site address",
+   "LSB_Quotation.Area_m2": "building area (m²)",
+   "LSB_Quotation.Lead_id": "direct link to the Lead (dropdown)",
+   "LSB_Quotation.Quarter": "auto from Issue_day",
+   "LSB_Quotation.Quotation_Consultant": "consultant / designer",
+   "LSB_Quotation.Quotation_LSB_Code": "LSB internal quotation code, e.g. 26B456",
+   "LSB_Quotation.Quotation_Maincons": "main contractor",
+   "LSB_Quotation.Quotation_owner": "project owner / investor",
+   "LSB_Quotation.Revision_no": "current price revision",
+   "LSB_Quotation.Sale_Assistant_id": "supporting sales assistant",
+   "LSB_Quotation.Tonnage": "tons",
+   "LSB_Quotation.Year": "auto from Issue_day",
+   "LSB_Result_Lesson.Category": "lesson category",
+   "LSB_Result_Lesson.Price_gap_pct": "price gap vs. the winner (0.05 = 5%)",
+   "LSB_Result_Lesson.Project_id": "optional — project created from the won quotation (v4.6: picked manually)",
+   "LSB_Result_Lesson.Quarter": "auto from Result_day",
+   "LSB_Result_Lesson.Quotation_code": "unique (1–1)",
+   "LSB_Result_Lesson.Winner": "winning bidder if lost",
+   "LSB_Result_Lesson.Year": "auto from Result_day",
+   "LSB_Staff.Email": "must match the Google account — used for access control",
+   "LSB_Staff.Staff_id": "ST-001, auto-generated",
+   "LSB_Task.Default_role": "default role that performs it",
+   "LSB_Task.Std_duration_days": "standard number of days",
+   "LSB_Task.Task_SOP": "SOP document URL (Drive/Docs)",
+   "LSB_Task.Task_duty": "task name",
+   "LSB_cost.Invoice_no": "supplier invoice number",
+   "LSB_cost.Quarter": "auto from Payment_day",
+   "LSB_cost.Year": "auto from Payment_day",
+   "LSB_paid.Quarter": "auto from Payment_day",
+   "LSB_paid.Year": "auto from Payment_day",
+   "LSB_payment_plan.PP_revision": "payment plan revision (1, 2…)",
+   "LSB_payment_plan.Payment_pct": "% of contract value",
+   "LSB_payment_plan.Shipping_id": "optional — milestone linked to a shipment",
+   "LSB_project.Grossmargin_Actual": "actual gross margin % (0.18 = 18%)",
+   "LSB_project.Grossmargin_EST": "planned gross margin % (0.15 = 15%)",
+   "LSB_project.Installation_date_start": "installation start date on site",
+   "LSB_project.Project_Consultant": "consultant / designer",
+   "LSB_project.Project_Maincons": "main contractor",
+   "LSB_project.Project_address": "site address",
+   "LSB_project.Project_code": "internal code",
+   "LSB_project.Project_handover": "project handover date to the customer",
+   "LSB_project.Project_owner": "project owner / investor",
+   "LSB_project.Quarter": "auto from Contract_day",
+   "LSB_project.Quotation_LSB-Code": "LSB internal quotation code = LSB_Quotation.Quotation_LSB_Code (typed in; warns if no match / not Won / duplicate)",
+   "LSB_project.RAD_Revision": "number of RAD changes (0, 1, 2…)",
+   "LSB_project.RAD_date": "required delivery date (current)",
+   "LSB_project.Tonnage_Actual": "actual steel tonnage",
+   "LSB_project.Tonnage_EST": "planned steel tonnage per contract",
+   "LSB_project.Year": "auto from Contract_day",
+   "LSB_shipment.BL_no": "bill of lading no.",
+   "LSB_shipment.Container_qty_actual": "actual containers",
+   "LSB_shipment.Container_qty_plan": "planned containers",
+   "LSB_shipment.Shipment_code": "lot code by area/grid, e.g. B1-P1 (A-G)",
+   "LSB_shipment.Shipment_no": "lot 1, 2, 3 …",
+   "LSB_shipment.Vessel_no": "vessel name / number"
+  }
+ }
+}

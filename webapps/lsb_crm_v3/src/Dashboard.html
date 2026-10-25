@@ -1,0 +1,98 @@
+<script>
+/**
+ * Dashboard.html — Dashboard DÙNG CHUNG (bản khởi đầu cho mọi DB):
+ *  - Tab Tổng quan: số bản ghi từng bảng (bấm → danh sách), chỉ số theo quý (DASHBOARD.metrics), cảnh báo.
+ *  - Tab Kiểm tra dữ liệu: FK mồ côi, trùng cột unique, ngày ngược thứ tự, bản ghi thiếu dữ liệu.
+ * Dashboard nghiệp vụ (vd 4 tab kiểu LSB v2.6) chỉ viết SAU KHI người dùng duyệt bản mẫu;
+ * thêm tab bằng App.pages.dashboard.tabs.push({ id, label: [vi, en], render(d) → html, bind(el, d) }) trong Custom.html.
+ * Dữ liệu: dashboard.get (05_Dashboard.gs) + notification.list (Notification.gs).
+ */
+App.pages.dashboard = {
+  title: 'Dashboard',
+  tab: 'ov',
+  tabs: [],
+  render: function (view, p) {
+    var year = Number(p.year) || new Date().getFullYear();
+    return Promise.all([
+      App.api('dashboard.get', { year: year }),
+      App.api('notification.list', { mine: !!p.mine })
+    ]).then(function (res) {
+      var me = App.pages.dashboard;
+      me.d = res[0]; me.alerts = res[1]; me.p = p;
+      if (p.focus === 'alerts') me.tab = 'ov';
+      me.draw(view);
+      if (p.focus === 'alerts') { var al = view.querySelector('#alerts'); if (al) al.scrollIntoView({ behavior: 'smooth' }); }
+    });
+  },
+
+  allTabs: function () {
+    var me = App.pages.dashboard;
+    return [{ id: 'ov', label: [L('Tổng quan', 'Overview')], render: me.vOverview },
+      { id: 'chk', label: [L('Kiểm tra dữ liệu', 'Data check')], render: me.vChecks }].concat(me.tabs.map(function (t) {
+      return { id: t.id, label: [L(t.label[0], t.label[1])], render: t.render, bind: t.bind };
+    }));
+  },
+
+  vOverview: function (d) {
+    var me = App.pages.dashboard, alerts = me.alerts;
+    var kpis = UI.kpis(d.kpis.map(function (k) {
+      return { label: App.tlabel(k.table), value: Fmt.num(k.total, 0), sub: k.missing ? k.missing + L(' thiếu dữ liệu', ' incomplete') : '',
+        tone: k.missing ? 'warn' : '', html: '<a data-goto="' + Fmt.esc(k.table) + '">' + Fmt.num(k.total, 0) + '</a>' };
+    }));
+    var q = d.metrics.length ? '<div class="card"><h3>' + L('Theo quý ', 'By quarter ') + d.year + '</h3><div class="table-wrap"><table class="tbl qtable"><thead><tr><th>' +
+      L('Chỉ số', 'Metric') + '</th>' + d.quarters.map(function (x) { return '<th class="num">' + x + '</th>'; }).join('') + '<th class="num">' + L('Cả năm', 'Full year') +
+      '</th></tr></thead><tbody>' + d.metrics.map(function (m) {
+        var f = function (v) { return Fmt.num(v, m.kind === 'sum' ? 0 : 0); };
+        return '<tr><td>' + Fmt.esc(L(m.label[0], m.label[1])) + '</td>' + d.quarters.map(function (x) { return '<td class="num">' + f(m.values[x]) + '</td>'; }).join('') +
+          '<td class="num"><b>' + f(m.values.total) + '</b></td></tr>';
+      }).join('') + '</tbody></table></div></div>' : '';
+    return kpis + q +
+      '<div class="card" id="alerts"><div class="card-head"><h3>' + L('Cảnh báo (', 'Alerts (') + alerts.counts.total + ')</h3>' +
+      '<label class="small"><input type="checkbox" id="mine"' + (me.p.mine ? ' checked' : '') + '> ' + L('Chỉ việc của tôi', 'My items only') + '</label></div>' +
+      UI.alertList(alerts.rows, 40) + '</div>';
+  },
+
+  vChecks: function (d) {
+    var groups = { danger: [], warn: [], info: [] };
+    d.checks.forEach(function (c) { (groups[c.level] || groups.info).push(c); });
+    var tone = { danger: 'danger', warn: 'warn', info: '' };
+    var name = { danger: L('Lỗi', 'Error'), warn: L('Lệch', 'Mismatch'), info: L('Thiếu', 'Missing') };
+    function rows(list) {
+      return UI.table([
+        { key: 'level', label: ' ', render: function (c) { return UI.badge(name[c.level], tone[c.level]); } },
+        { key: 'table', label: L('Bảng', 'Table'), render: function (c) { return Fmt.esc(App.tlabel(c.table)); } },
+        { key: 'id', label: L('Bản ghi', 'Record'), render: function (c) { return '<span class="id">' + Fmt.esc(c.id) + '</span>'; } },
+        { key: 'message', label: L('Nội dung', 'Issue'), render: function (c) { return Fmt.esc(c.message); } }
+      ], list, { empty: L('Không có', 'None'), onRow: function (c) { App.go('entity', { table: c.table, id: App.table(c.table).view360 ? c.id : '' }); } });
+    }
+    return UI.kpis([
+      { label: L('Lỗi', 'Errors'), value: groups.danger.length, tone: groups.danger.length ? 'danger' : 'ok', sub: L('FK mồ côi, trùng mã', 'orphan FK, duplicates') },
+      { label: L('Lệch', 'Mismatches'), value: groups.warn.length, tone: groups.warn.length ? 'warn' : '', sub: L('ngày ngược, FK mềm', 'date order, soft FK') },
+      { label: L('Thiếu dữ liệu', 'Incomplete'), value: groups.info.length, sub: L('cột bắt buộc / nên có', 'required / recommended columns') }
+    ]) + '<div class="card"><h3>' + L('Lỗi & lệch', 'Errors & mismatches') + '</h3>' + rows(groups.danger.concat(groups.warn)) + '</div>' +
+      '<details class="card"><summary><b>' + L('Bản ghi thiếu dữ liệu (', 'Incomplete records (') + groups.info.length + ')</b></summary><div style="margin-top:10px">' + rows(groups.info) + '</div></details>';
+  },
+
+  draw: function (view) {
+    var me = App.pages.dashboard, d = me.d, p = me.p;
+    var tabs = me.allTabs(), cur = tabs.filter(function (t) { return t.id === me.tab; })[0] || tabs[0];
+    view.innerHTML = '<div id="dash"><div class="page-head"><div class="title"><h2>Dashboard · ' + d.year + '</h2><div class="muted small">' +
+      L('Hôm nay ', 'Today ') + Fmt.date(d.today) + L(' · số liệu tính từ dữ liệu gốc', ' · figures computed from source data') + '</div></div>' +
+      '<select id="yr" style="width:auto">' + d.years.map(function (y) { return '<option' + (y === d.year ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></div>' +
+      '<div class="tabs dash-tabs">' + tabs.map(function (t) {
+        return '<button class="tab' + (t.id === cur.id ? ' active' : '') + '" data-dt="' + t.id + '">' + Fmt.esc(t.label[0]) +
+          (t.id === 'chk' && d.checks.some(function (c) { return c.level !== 'info'; }) ? ' <span class="n">' + d.checks.filter(function (c) { return c.level !== 'info'; }).length + '</span>' : '') + '</button>';
+      }).join('') + '</div>' + cur.render(d) + '</div>';
+    var root = view.querySelector('#dash');
+    view.querySelector('#yr').onchange = function () { App.go('dashboard', { year: +this.value, mine: p.mine }, { replace: true }); };
+    var mine = view.querySelector('#mine');
+    if (mine) mine.onchange = function () { App.go('dashboard', { year: d.year, mine: this.checked }, { replace: true }); };
+    root.addEventListener('click', function (e) {
+      var t = e.target.closest('[data-dt]'); if (t) { me.tab = t.dataset.dt; me.draw(view); return; }
+      var g = e.target.closest('[data-goto]'); if (g) { App.go('entity', { table: g.dataset.goto }); }
+    });
+    UI.bindLinks(view);
+    if (cur.bind) cur.bind(root, d);
+  }
+};
+</script>

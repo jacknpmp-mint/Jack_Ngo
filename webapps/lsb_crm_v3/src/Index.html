@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><?= appName ?></title>
+  <?!= include('Styles'); ?>
+</head>
+<body>
+  <!-- Index.html — Khung ứng dụng: thanh điều hướng, thanh trên, vùng hiển thị trang.
+       Menu nghiệp vụ sinh từ MENU (01_Config.gs) vào #nav-dynamic bằng App.buildMenu() (JS.html).
+       Chữ tĩnh có data-en (bản tiếng Anh) — App.applyLang() đổi theo nút VN/EN (#lang). -->
+  <div class="app" id="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand" id="brand"><b><?= appName ?></b><span></span></div>
+      <nav id="nav">
+        <div class="nav-group"><h6 data-en="Overview">Tổng quan</h6>
+          <a class="nav-item" data-route="dashboard"><span class="ico">▦</span>Dashboard</a>
+        </div>
+        <div id="nav-dynamic"></div>
+        <div class="nav-group" id="nav-system"><h6 data-en="System">Hệ thống</h6>
+          <a class="nav-item" data-route="activity" data-cap="activity"><span class="ico">⟲</span><span data-en="Change log">Nhật ký thay đổi</span></a>
+          <a class="nav-item" data-route="account"><span class="ico">⚙</span><span data-en="Account">Tài khoản</span></a>
+        </div>
+      </nav>
+      <div class="sidebar-foot"><?= appName ?> · v<?= appVersion ?></div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <button class="menu-btn" id="menu-btn" aria-label="Mở menu" data-en-title="Open menu">☰</button>
+        <h1 id="page-title">Đang tải…</h1>
+        <span class="busy hidden" id="busy"></span>
+        <button class="lang-btn" id="lang" type="button">EN</button>
+        <button class="bell" id="bell" title="Cảnh báo" data-en-title="Alerts">🔔<span class="dot hidden" id="bell-count">0</span></button>
+        <div class="user-chip" id="user-chip"></div>
+      </header>
+      <section class="view" id="view">
+        <div class="loading"><div class="spinner"></div><span data-en="Loading data…">Đang tải dữ liệu…</span></div>
+      </section>
+    </div>
+  </div>
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <?!= include('JS'); ?>
+  <?!= include('Components'); ?>
+  <?!= include('Dashboard'); ?>
+  <?!= include('Entity'); ?>
+  <?!= include('Custom'); ?>
+  <script>App.start();</script>
+</body>
+</html>
