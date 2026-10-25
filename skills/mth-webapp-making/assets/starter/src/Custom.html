@@ -1,0 +1,13 @@
+<script>
+/**
+ * Custom.html — Phần giao diện RIÊNG của Database này (nạp sau cùng). Bộ khung dùng chung không cần sửa.
+ * Đặt ở đây (chỉ khi người dùng đã duyệt):
+ *  - UI.AUTOFILL[bảng] = [{ fk, ref, also: [cột], fill: function (bảnGhiCha, giáTrịForm) { return { cột: giá trị }; } }]
+ *      tự điền cột phụ thuộc khi chọn FK (bản ghi cha lấy qua record.related; giá trị thêm từ RELATED_PROVIDERS).
+ *  - UI.FK_GROUP_FILTER[bảngForm][bảngĐích] = ['Nhóm A', …]   lọc lựa chọn FK theo cột groupCol của bảng đích.
+ *  - App.pages.dashboard.tabs.push({ id, label: [vi, en], render: function (d) { return html; }, bind: function (el, d) {} })
+ *      tab Dashboard nghiệp vụ (dữ liệu thêm từ DASHBOARD.providers ở server: d[tên hàm]).
+ *  - App.pages.entity.custom360[bảng] = function (view, d, p) { … }   trang 360° riêng (vd KPI tài chính dự án).
+ *  - App.pages['tên'] = { title, render(view, params) }   + mục menu { route: 'tên', label: [vi, en], icon } trong MENU.
+ */
+</script>

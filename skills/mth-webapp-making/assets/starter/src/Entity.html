@@ -1,0 +1,141 @@
+<script>
+/**
+ * Entity.html — Trang dùng chung cho MỌI bảng nghiệp vụ (route 'entity'):
+ *  - Danh sách: tìm kiếm, lọc năm (dateCol), lọc theo cột danh mục, cờ + lọc "Thiếu dữ liệu", Thêm mới.
+ *  - Trang 360° (bảng có view360): thông tin bản ghi, link bản ghi cha, tab cho từng bảng con
+ *    (thêm bản ghi con → FK điền sẵn theo ngữ cảnh), tab Nhật ký.
+ * Dữ liệu: entity.list / entity.get360 (04_Entity.gs). Trang nghiệp vụ riêng (vd Dự án 360° có KPI) viết ở Custom.html
+ * và có thể thay hẳn trang này cho một bảng: App.pages.entity.custom360[bảng] = function (view, d, p) {…}.
+ */
+App.pages.entity = {
+  custom360: {},
+  title: function (p) {
+    if (!p.table || !App.table(p.table)) return L('Dữ liệu', 'Data');
+    return App.tlabel(p.table) + (p.id ? ' · ' + p.id : '');
+  },
+  render: function (view, p) {
+    if (!p.table || !App.table(p.table)) { App.go('dashboard', {}, { replace: true }); return null; }
+    return p.id ? App.pages.entity.render360(view, p) : App.pages.entity.renderList(view, p);
+  },
+
+  /** Cột hiển thị ở danh sách. */
+  listCols: function (table) {
+    var def = App.table(table);
+    var names = def.listCols && def.listCols.length ? def.listCols :
+      def.columns.filter(function (c) { return !c.auto && !c.long; }).slice(0, 7).map(function (c) { return c.name; });
+    return names.map(function (k) { return App.col(table, k); }).filter(Boolean);
+  },
+  /** Cột → định nghĩa cho UI.table (FK hiện nhãn từ server, PK kèm cờ thiếu dữ liệu). */
+  tableCols: function (table) {
+    return App.pages.entity.listCols(table).map(function (c) {
+      return { key: c.name, label: App.clabel(table, c.name), num: c.type === 'number' && !c.list, render: function (r) {
+        if (c.key === 'PK') return '<span class="id">' + Fmt.esc(r[c.name]) + '</span>' + UI.missingBadge(table, r);
+        if (c.key === 'FK' && r[c.name]) {
+          var lbl = (r._labels && r._labels[c.name]) || App.label(c.ref, r[c.name]);
+          return Fmt.esc(lbl && lbl !== r[c.name] ? lbl : '') + ' <span class="id">' + Fmt.esc(r[c.name]) + '</span>';
+        }
+        return Fmt.cell(c, r[c.name]);
+      } };
+    });
+  },
+
+  renderList: function (view, p) {
+    var table = p.table, def = App.table(table);
+    var listCol = def.columns.filter(function (c) { return c.list && !c.auto; })[0];
+    var f = { table: table, q: p.q || '', year: p.year || '', missing: !!p.missing, eq: {} };
+    if (listCol && p.v) f.eq[listCol.name] = p.v;
+    return App.api('entity.list', f).then(function (res) {
+      var years = {}, y0 = new Date().getFullYear();
+      for (var y = y0 + 1; y >= y0 - 5; y--) years[y] = true;
+      view.innerHTML =
+        '<div class="page-head"><div class="title"><h2>' + Fmt.esc(App.tlabel(table)) + '</h2><div class="muted small">' + res.total +
+        L(' bản ghi · sheet ', ' records · sheet ') + Fmt.esc(table) + '</div></div>' +
+        (App.canWrite(table) ? '<button class="btn primary" id="add">+ ' + L('Thêm ', 'Add ') + Fmt.esc(App.tlabel(table).toLowerCase()) + '</button>' : '') + '</div>' +
+        '<div class="toolbar"><input id="q" class="grow" placeholder="' + L('Tìm mã, tên, nội dung…', 'Search ID, name, content…') + '" value="' + Fmt.esc(f.q) + '">' +
+        (def.dateCol ? '<select id="year"><option value="">' + L('Mọi năm', 'All years') + '</option>' + Object.keys(years).sort().reverse().map(function (y) {
+          return '<option' + (String(f.year) === y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select>' : '') +
+        (listCol ? '<select id="v"><option value="">' + L('Mọi ', 'All ') + Fmt.esc(App.clabel(table, listCol.name).toLowerCase()) + '</option>' +
+          (App.boot.config.lists[listCol.list] || []).map(function (s) { return '<option' + (p.v === s ? ' selected' : '') + '>' + Fmt.esc(s) + '</option>'; }).join('') + '</select>' : '') +
+        '<label class="small"><input type="checkbox" id="miss"' + (f.missing ? ' checked' : '') + '> ' + L('Thiếu dữ liệu', 'Incomplete') + '</label></div>' +
+        UI.table(App.pages.entity.tableCols(table), res.rows, { empty: L('Chưa có dữ liệu phù hợp', 'No matching records'), onRow: function (r) {
+          if (def.view360) App.go('entity', { table: table, id: r[def.pk] });
+          else App.edit(table, r, { onSaved: App.reload, onDeleted: App.reload });
+        } });
+      function apply() {
+        App.go('entity', { table: table, q: view.querySelector('#q').value.trim(), year: view.querySelector('#year') ? view.querySelector('#year').value : '',
+          v: view.querySelector('#v') ? view.querySelector('#v').value : '', missing: view.querySelector('#miss').checked }, { replace: true });
+      }
+      ['year', 'v', 'miss'].forEach(function (id) { var e = view.querySelector('#' + id); if (e) e.onchange = apply; });
+      view.querySelector('#q').addEventListener('keydown', function (e) { if (e.key === 'Enter') apply(); });
+      var add = view.querySelector('#add');
+      if (add) add.onclick = function () {
+        App.edit(table, {}, { onSaved: function (r) { if (def.view360) App.go('entity', { table: table, id: r[def.pk] }); else App.reload(); } });
+      };
+    });
+  },
+
+  render360: function (view, p) {
+    return App.api('entity.get360', { table: p.table, id: p.id }).then(function (d) {
+      var custom = App.pages.entity.custom360[p.table];
+      if (custom) custom(view, d, p); else App.pages.entity.draw360(view, d, p);
+    });
+  },
+
+  draw360: function (view, d, p) {
+    var table = d.table, def = App.table(table), rec = d.record, id = rec[def.pk];
+    var reload = function () {
+      App.api('entity.get360', { table: table, id: id }).then(function (nd) { App.pages.entity.draw360(view, nd, { table: table, id: id, tab: UI.tabs._last }); }).catch(App.fail);
+    };
+    var canW = App.canWrite(table);
+    var title = (def.labelCols || [def.display]).map(function (k) { return rec[k]; }).filter(function (v) { return v !== '' && v !== null && v !== undefined; }).join(' · ') || id;
+    view.innerHTML =
+      '<div class="page-head"><div class="title"><div class="crumb"><a id="back">' + Fmt.esc(App.tlabel(table)) + '</a> › <span class="id">' + Fmt.esc(id) + '</span></div>' +
+      '<h2>' + Fmt.esc(title) + UI.missingBadge(table, rec) + '</h2>' +
+      '<div class="muted small">' + d.parents.map(function (x) {
+        return Fmt.esc(App.clabel(table, x.column)) + ': ' + (x.view360 ? '<a data-p-table="' + Fmt.esc(x.table) + '" data-p-id="' + Fmt.esc(x.id) + '">' : '') +
+          Fmt.esc(x.label || x.id) + (x.view360 ? '</a>' : '') + ' <span class="id">' + Fmt.esc(x.id) + '</span>';
+      }).join(' · ') + '</div></div>' +
+      (canW ? '<button class="btn" id="edit">✎ ' + L('Sửa', 'Edit') + '</button>' : '<button class="btn" id="edit">' + L('Xem chi tiết', 'View details') + '</button>') + '</div>' +
+      '<div class="card" id="tabs"></div>';
+    view.querySelector('#back').onclick = function () { App.go('entity', { table: table }); };
+    view.querySelector('#edit').onclick = function () {
+      App.edit(table, rec, { onSaved: reload, onDeleted: function () { App.go('entity', { table: table }); } });
+    };
+    view.querySelectorAll('[data-p-table]').forEach(function (a) {
+      a.onclick = function () { App.go('entity', { table: a.dataset.pTable, id: a.dataset.pId }); };
+    });
+
+    var tabs = [{ id: 'info', label: L('Thông tin', 'Details'), render: function (el) {
+      el.innerHTML = UI.info(def.columns.filter(function (c) { return c.key !== 'PK'; }).map(function (c) {
+        var v = rec[c.name];
+        if (c.key === 'FK' && v) {
+          var par = d.parents.filter(function (x) { return x.column === c.name; })[0];
+          return [App.clabel(table, c.name), Fmt.esc((par && par.label) || App.label(c.ref, v)) + ' <span class="id">' + Fmt.esc(v) + '</span>'];
+        }
+        return [App.clabel(table, c.name), Fmt.cell(c, v)];
+      }));
+    } }];
+    d.children.forEach(function (ch) {
+      var cdef = App.table(ch.table);
+      if (!cdef) return;
+      var tabId = ch.table + (d.children.filter(function (x) { return x.table === ch.table; }).length > 1 ? '.' + ch.column : '');
+      tabs.push({ id: tabId, label: App.tlabel(ch.table), count: ch.rows.length, render: function (el) {
+        var ctx = {}; ctx[ch.column] = id;
+        var defaults = {}; defaults[ch.column] = id;
+        el.innerHTML = '<div class="card-head"><h3>' + Fmt.esc(App.tlabel(ch.table)) + '</h3>' +
+          (App.canWrite(ch.table) ? '<button class="btn sm primary" data-add>+ ' + Fmt.esc(App.tlabel(ch.table)) + '</button>' : '') + '</div>' +
+          UI.table(App.pages.entity.tableCols(ch.table), ch.rows.slice().reverse(), { empty: L('Chưa có dữ liệu', 'No records yet'), onRow: function (r) {
+            if (cdef.view360) App.go('entity', { table: ch.table, id: r[cdef.pk] });
+            else App.edit(ch.table, r, { context: ctx, onSaved: reload, onDeleted: reload });
+          } });
+        var add = el.querySelector('[data-add]');
+        if (add) add.onclick = function () { App.edit(ch.table, {}, { defaults: defaults, context: ctx, onSaved: reload }); };
+      } });
+    });
+    if (App.can('activity')) tabs.push({ id: 'log', label: L('Nhật ký', 'Change log'), count: d.activity.length, render: function (el) {
+      el.innerHTML = UI.activityList(d.activity);
+    } });
+    UI.tabs(view.querySelector('#tabs'), tabs, p.tab);
+  }
+};
+</script>

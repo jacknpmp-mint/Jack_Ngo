@@ -1,0 +1,224 @@
+<script>
+/**
+ * Bidding.html — Báo giá & Đấu thầu (v2.1, DB v4.2 gộp 1 file).
+ *  - App.pages.bidding   : danh sách báo giá + chỉ số pipeline + việc thầu đang mở.
+ *  - App.pages.quotation : Báo giá 360° — lead → báo giá → chiến lược → kế hoạch hành động
+ *                          → kết quả & bài học → dự án.
+ *  - App.bidTaskTable    : bảng việc thầu dùng chung (Lead 360°, Báo giá 360°, trang danh sách).
+ */
+
+/** Bảng việc thầu (đánh giá lead / kế hoạch hành động). rows từ bidding.tasks hoặc 360. */
+App.bidTaskTable = function (rows, opts) {
+  opts = opts || {};
+  var cols = [];
+  if (opts.kind !== false) cols.push({ key: 'Kind', label: 'Loại', render: function (r) {
+    return UI.badge(r.Kind === 'Qualifying' ? 'Đánh giá lead' : 'Hành động', r.Kind === 'Qualifying' ? 'orange' : 'blue') +
+      (r.Stage_calc ? '<div class="small muted">' + Fmt.esc(r.Stage_calc) + '</div>' : ''); } });
+  cols.push({ key: 'Task_duty', label: 'Việc', render: function (r) {
+    return '<span class="id">' + Fmt.esc(r.Id || r.Qualification_id || r.Action_id) + '</span> ' + Fmt.esc(r.Task_duty || r.Task_id); } });
+  if (opts.lead) cols.push({ key: 'Company_name', label: 'Lead / Báo giá', render: function (r) {
+    return Fmt.esc(r.Company_name || r.Lead_id) + (r.Quotation_code ? '<div class="small"><a data-q="' + Fmt.esc(r.Quotation_code) + '">' + Fmt.esc(r.Quotation_code) + '</a></div>' : ''); } });
+  if (opts.quotation) cols.push({ key: 'Quotation_code', label: 'Báo giá', render: function (r) {
+    return r.Quotation_code ? '<a data-q="' + Fmt.esc(r.Quotation_code) + '">' + Fmt.esc(r.Quotation_code) + '</a>' : '<span class="muted">—</span>'; } });
+  cols = cols.concat([
+    { key: 'Owner_name', label: 'Phụ trách' },
+    { key: 'Start_calc', label: 'Bắt đầu', render: function (r) { return Fmt.date(r.Start_calc); } },
+    { key: 'Due_calc', label: 'Hạn', render: function (r) { return Fmt.date(r.Due_calc) + (r.Overdue ? ' ' + UI.badge('trễ', 'danger') : ''); } },
+    { key: 'Done_calc', label: 'Xong', render: function (r) { return Fmt.date(r.Done_calc); } },
+    { key: 'Status_calc', label: 'Trạng thái', render: function (r) { return UI.status(r.Status_calc); } }
+  ]);
+  return UI.table(cols, rows, { empty: opts.empty || 'Chưa có việc', onRow: function (r) {
+    var table = r.Kind === 'Qualifying' ? 'LSB_Lead_Qualifying' : 'LSB_Bidding_action_plan';
+    App.edit(table, r, { onSaved: opts.onChange, onDeleted: opts.onChange });
+  } });
+};
+/** Gắn link mở báo giá trong bảng việc. */
+App.bindQuoteLinks = function (el) {
+  el.querySelectorAll('[data-q]').forEach(function (a) { a.onclick = function (e) { e.stopPropagation(); App.go('quotation', { id: a.dataset.q }); }; });
+};
+
+App.pages.bidding = {
+  title: 'Báo giá & Đấu thầu',
+  render: function (view, p) {
+    var f = { q: p.q || '', year: p.year || '', status: p.status || '', sales: p.sales || '', open: !!p.open };
+    return Promise.all([App.api('quotation.list', f), App.api('bidding.tasks', { open: true, mine: !!p.mine })]).then(function (res) {
+      var d = res[0], tasks = res[1], s = d.summary;
+      var staff = App.boot.lookups.LSB_Staff || [];
+      var years = {}; var y0 = new Date().getFullYear();
+      for (var y = y0 + 1; y >= y0 - 5; y--) years[y] = true;
+      var reload = function () { App.go('bidding', p, { fromHistory: true }); };
+      view.innerHTML =
+        '<div class="page-head"><div class="title"><h2>Báo giá &amp; Đấu thầu</h2><div class="muted small">Lead Qualifying → Quotation → Strategy / Action plan → Result &amp; Lesson → Project</div></div>' +
+        (App.can('write') ? '<button class="btn primary" id="add">+ Thêm báo giá</button>' : '') + '</div>' +
+        UI.kpis([
+          { label: 'Đang chào giá', value: Fmt.compact(s.pipelineUSD) + ' USD', sub: s.openCount + ' báo giá Draft / Submitted / Negotiating', tone: 'accent' },
+          { label: 'Có trọng số', value: Fmt.compact(s.weightedUSD) + ' USD', sub: 'Value × Win_probability' },
+          { label: 'Đã thắng', value: Fmt.compact(s.wonUSD) + ' USD', sub: s.wonCount + ' báo giá Won', tone: 'ok' },
+          { label: 'Tỷ lệ thắng', value: s.winRate === null ? '—' : Fmt.pct(s.winRate, 0), sub: 'Won / (Won + Lost) theo kết quả thầu' },
+          { label: 'Việc thầu trễ', value: tasks.overdue, sub: tasks.total + ' việc đang mở', tone: tasks.overdue ? 'warn' : '' }
+        ]) +
+        '<div class="toolbar"><input id="q" class="grow" placeholder="Tìm mã, mã LSB, dự án, công ty…" value="' + Fmt.esc(f.q) + '">' +
+        '<select id="year"><option value="">Mọi năm</option>' + Object.keys(years).sort().reverse().map(function (y) {
+          return '<option' + (String(f.year) === y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select>' +
+        '<select id="status"><option value="">Mọi trạng thái</option>' + (App.boot.config.lists.Quot_status || []).map(function (x) {
+          return '<option' + (f.status === x ? ' selected' : '') + '>' + Fmt.esc(x) + '</option>'; }).join('') + '</select>' +
+        '<select id="sales"><option value="">Mọi Sales</option>' + staff.map(function (x) {
+          return '<option value="' + x.id + '"' + (f.sales === x.id ? ' selected' : '') + '>' + Fmt.esc(x.label) + '</option>'; }).join('') + '</select>' +
+        '<label class="small"><input type="checkbox" id="open" style="width:auto"' + (f.open ? ' checked' : '') + '> Đang chào</label></div>' +
+        '<div class="card"><h3>Báo giá (' + d.total + ')</h3>' +
+        UI.table([
+          { key: 'Quotation_code', label: 'Mã', render: function (r) { return '<span class="id">' + Fmt.esc(r.Quotation_code) + '</span><div class="small muted">' + Fmt.esc(r.Quotation_LSB_Code) + '</div>'; } },
+          { key: 'Project_name', label: 'Công trình / Khách', render: function (r) { return '<b>' + Fmt.esc(r.Project_name) + '</b><div class="small muted">' + Fmt.esc([r.Company_name, r.Nation].filter(Boolean).join(' · ')) + '</div>'; } },
+          { key: 'Status', label: 'Trạng thái', render: function (r) { return UI.status(r.Status) + (r.Result && r.Result !== r.Status ? '<div>' + UI.status(r.Result) + '</div>' : ''); } },
+          { key: 'Sales_name', label: 'Sales' },
+          { key: 'Issue_day', label: 'Phát hành', render: function (r) { return Fmt.date(r.Issue_day) + (r.Revision_no ? '<div class="small muted">rev ' + Fmt.esc(r.Revision_no) + '</div>' : ''); } },
+          { key: 'Value_USD', label: 'Giá trị (USD)', num: true, render: function (r) { return Fmt.usd(r.Value_USD) + (r.Tonnage ? '<div class="small muted">' + Fmt.num(r.Tonnage, 0) + ' tấn</div>' : ''); } },
+          { key: 'Win_probability', label: 'Xác suất', num: true, render: function (r) { return Fmt.pct(r.Win_probability, 0); } },
+          { key: 'Actions', label: 'Việc', num: true, render: function (r) {
+            return (r.Actions ? r.Actions_done + '/' + r.Actions : '') + (r.Actions_overdue ? ' ' + UI.badge(r.Actions_overdue + ' trễ', 'danger') : ''); } },
+          { key: 'Project_id', label: 'Dự án', render: function (r) { return r.Project_id ? '<span class="id">' + Fmt.esc(r.Project_id) + '</span>' : ''; } }
+        ], d.rows, { empty: 'Chưa có báo giá phù hợp', onRow: function (r) { App.go('quotation', { id: r.Quotation_code }); } }) + '</div>' +
+        '<div class="card" id="tasks"><div class="card-head"><h3>Việc thầu đang mở (' + tasks.total + ')</h3>' +
+        '<label class="small"><input type="checkbox" id="mine" style="width:auto"' + (p.mine ? ' checked' : '') + '> Chỉ việc của tôi</label></div>' +
+        App.bidTaskTable(tasks.rows, { lead: true, empty: 'Không có việc đang mở', onChange: reload }) + '</div>';
+
+      function apply() {
+        App.go('bidding', { q: view.querySelector('#q').value.trim(), year: view.querySelector('#year').value,
+          status: view.querySelector('#status').value, sales: view.querySelector('#sales').value,
+          open: view.querySelector('#open').checked, mine: view.querySelector('#mine').checked }, { replace: true });
+      }
+      ['year', 'status', 'sales', 'open', 'mine'].forEach(function (id) { view.querySelector('#' + id).onchange = apply; });
+      view.querySelector('#q').addEventListener('keydown', function (e) { if (e.key === 'Enter') apply(); });
+      App.bindQuoteLinks(view);
+      var add = view.querySelector('#add');
+      if (add) add.onclick = function () {
+        App.edit('LSB_Quotation', {}, { defaults: { Status: 'Draft', Sales_id: App.boot.user.staffId, Issue_day: App.boot.today, Revision_no: 0 },
+          onSaved: function (r) { App.go('quotation', { id: r.Quotation_code }); } });
+      };
+    });
+  }
+};
+
+App.pages.quotation = {
+  title: function (p) { return 'Báo giá ' + (p.id || ''); },
+  render: function (view, p) {
+    return App.api('quotation.get360', { id: p.id }).then(function (d) { App.pages.quotation.draw(view, d, p); });
+  },
+
+  draw: function (view, d, p) {
+    var q = d.quotation, k = d.kpi, code = q.Quotation_code, canW = App.can('write');
+    var reload = function () {
+      App.api('quotation.get360', { id: code }).then(function (nd) { App.pages.quotation.draw(view, nd, { id: code, tab: UI.tabs._last }); }).catch(App.fail);
+    };
+    var step = function (label, done, sub) {
+      return '<div class="flow-step ' + (done ? 'done' : '') + '"><b>' + (done ? '✔ ' : '○ ') + Fmt.esc(label) + '</b><span>' + (sub || '') + '</span></div>';
+    };
+    view.innerHTML =
+      '<div class="page-head"><div class="title"><div class="crumb"><a data-go="bidding">Báo giá &amp; Đấu thầu</a> › ' + Fmt.esc(code) + '</div>' +
+      '<h2>' + Fmt.esc(q.Project_name || code) + ' ' + UI.status(q.Status) + '</h2><div class="muted small">' +
+      Fmt.esc([q.Quotation_LSB_Code, d.lead ? d.lead.Company_name : q.Lead_id, q.Sales_name ? 'Sales ' + q.Sales_name : ''].filter(Boolean).join(' · ')) +
+      '</div></div>' + (canW ? '<button class="btn" id="edit">Sửa báo giá</button>' : '') + '</div>' +
+      '<div class="flow">' +
+        step('Lead', !!d.lead, d.lead ? UI.status(d.lead.Lead_status) : '') +
+        step('Báo giá', true, 'rev ' + Fmt.esc(q.Revision_no === '' ? 0 : q.Revision_no)) +
+        step('Chiến lược', k.hasStrategy, d.strategy ? Fmt.esc(d.strategy.Price_positioning) : 'chưa có') +
+        step('Hành động', k.actions > 0 && k.actionsDone === k.actions, k.actionsDone + '/' + k.actions + ' xong') +
+        step('Kết quả', k.hasResult, d.result ? UI.status(d.result.Result) : 'chưa có') +
+        step('Dự án', !!d.project, d.project ? Fmt.esc(d.project.Project_id) : '—') +
+      '</div>' +
+      UI.kpis([
+        { label: 'Giá trị', value: Fmt.usd(k.valueUSD) + ' USD', sub: k.valueVND ? Fmt.compact(k.valueVND) + ' VND' : '', tone: 'accent' },
+        { label: 'Xác suất thắng', value: k.winProbability === null ? '—' : Fmt.pct(k.winProbability, 0), sub: 'trọng số ' + Fmt.compact(k.weightedUSD) + ' USD' },
+        { label: 'Đơn giá', value: k.usdPerTon === null ? '—' : Fmt.usd(k.usdPerTon) + ' USD/t', sub: k.usdPerM2 === null ? '' : Fmt.num(k.usdPerM2, 1) + ' USD/m²' },
+        { label: 'Việc thầu', value: k.actionsDone + '/' + k.actions, sub: k.actionsOverdue ? '<span style="color:var(--danger)">' + k.actionsOverdue + ' trễ</span>' : '', tone: k.actionsOverdue ? 'warn' : '' },
+        { label: 'Hợp đồng', value: k.contractUSD === null ? '—' : Fmt.usd(k.contractUSD) + ' USD', sub: d.project ? Fmt.esc(d.project.Project_id) : 'chưa có dự án', tone: d.project ? 'ok' : '' }
+      ]) +
+      '<div class="card" id="tabs"></div>';
+
+    view.querySelector('[data-go=bidding]').onclick = function () { App.go('bidding'); };
+    var eb = view.querySelector('#edit');
+    if (eb) eb.onclick = function () { App.edit('LSB_Quotation', q, { onSaved: reload, onDeleted: function () { App.go('bidding'); } }); };
+
+    var tabs = [
+      { id: 'info', label: 'Thông tin', render: function (el) {
+        el.innerHTML = UI.info([
+          ['Lead', d.lead ? '<a data-lead="' + Fmt.esc(d.lead.Lead_id) + '">' + Fmt.esc(d.lead.Company_name) + '</a> <span class="id">' + Fmt.esc(d.lead.Lead_id) + '</span>' : Fmt.esc(q.Lead_id)],
+          ['Khách hàng', d.customer ? Fmt.esc(d.customer.Company_name) + ' <span class="id">' + Fmt.esc(d.customer.Customer_id) + '</span>' : '<span class="muted">chưa chuyển đổi</span>'],
+          ['Mã báo giá LSB', Fmt.esc(q.Quotation_LSB_Code)], ['Địa chỉ công trình', Fmt.esc(q.Address)],
+          ['Phạm vi', Fmt.esc(q.Scope)], ['Incoterm', Fmt.esc(q.Incoterm)],
+          ['Diện tích (m²)', Fmt.num(q.Area_m2)], ['Khối lượng (tấn)', Fmt.num(q.Tonnage)],
+          ['Giá trị USD / VND', Fmt.usd(q.Value_USD) + ' / ' + Fmt.usd(q.Value_VND)],
+          ['Chủ đầu tư', Fmt.esc(q.Quotation_owner)], ['Tổng thầu', Fmt.esc(q.Quotation_Maincons)], ['Tư vấn', Fmt.esc(q.Quotation_Consultant)],
+          ['Ngày phát hành', Fmt.date(q.Issue_day)], ['Lần sửa giá', Fmt.esc(q.Revision_no)],
+          ['Sales / Trợ lý', Fmt.esc(q.Sales_name) + (q.Sale_Assistant_name ? ' / ' + Fmt.esc(q.Sale_Assistant_name) : '')],
+          ['Năm / Quý', Fmt.esc(q.Year) + ' ' + Fmt.esc(q.Quarter)]
+        ]);
+        var a = el.querySelector('[data-lead]');
+        if (a) a.onclick = function () { App.go('lead', { id: a.dataset.lead }); };
+      } },
+      { id: 'strategy', label: 'Chiến lược', count: d.strategy ? 1 : 0, render: function (el) {
+        var s = d.strategy;
+        el.innerHTML = '<div class="card-head"><h3>Chiến lược thầu</h3>' + (canW ? '<button class="btn sm ' + (s ? '' : 'primary') + '" id="st">' + (s ? 'Sửa' : '+ Lập chiến lược') + '</button>' : '') + '</div>' +
+          (s ? UI.info([['Mã', '<span class="id">' + Fmt.esc(s.Strategy_id) + '</span>'], ['Định vị giá', UI.status(s.Price_positioning)],
+            ['Giá trị đề xuất', Fmt.esc(s.Value_proposition)], ['Win theme', Fmt.esc(s.Win_theme)],
+            ['Điểm mạnh', Fmt.esc(s.Strengths)], ['Điểm yếu', Fmt.esc(s.Weaknesses)],
+            ['Đối thủ chính', Fmt.esc(s.Key_competitors)], ['Cách tiếp cận', Fmt.esc(s.Approach)]])
+            : '<div class="empty">Chưa có chiến lược cho báo giá này (quan hệ 1 báo giá – 1 chiến lược).</div>');
+        var b = el.querySelector('#st');
+        if (b) b.onclick = function () { App.edit('LSB_Bidding_strategy', s || {}, { defaults: { Quotation_code: code }, onSaved: reload, onDeleted: reload }); };
+      } },
+      { id: 'actions', label: 'Kế hoạch hành động', count: d.actions.length, render: function (el) {
+        el.innerHTML = '<div class="card-head"><h3>Kế hoạch hành động</h3>' + (canW ? '<button class="btn sm primary" id="add-a">+ Việc</button>' : '') + '</div>' +
+          App.bidTaskTable(d.actions, { kind: false, empty: 'Chưa có việc cho báo giá này', onChange: reload });
+        var b = el.querySelector('#add-a');
+        if (b) b.onclick = function () {
+          App.edit('LSB_Bidding_action_plan', {}, { defaults: { Lead_id: q.Lead_id, Quotation_code: code, Status: 'Not started',
+            Owner_id: App.boot.user.staffId, Start_day: App.boot.today }, onSaved: reload });
+        };
+      } },
+      { id: 'result', label: 'Kết quả & bài học', count: d.result ? 1 : 0, render: function (el) {
+        var r = d.result;
+        el.innerHTML = '<div class="card-head"><h3>Kết quả &amp; bài học</h3>' + (canW ? '<button class="btn sm ' + (r ? '' : 'primary') + '" id="rs">' + (r ? 'Sửa' : '+ Ghi kết quả') + '</button>' : '') + '</div>' +
+          (r ? UI.info([['Mã', '<span class="id">' + Fmt.esc(r.Result_id) + '</span>'], ['Kết quả', UI.status(r.Result)], ['Ngày', Fmt.date(r.Result_day)],
+            ['Đơn vị thắng', Fmt.esc(r.Winner)], ['Chênh giá', Fmt.pct(r.Price_gap_pct, 1)], ['Lý do', Fmt.esc(r.Win_loss_reason)],
+            ['Làm tốt', Fmt.esc(r.What_went_well)], ['Cần cải thiện', Fmt.esc(r.To_improve)], ['Lần sau', Fmt.esc(r.Next_time_action)],
+            ['Nhóm bài học', Fmt.esc(r.Category)], ['Dự án', r.Project_id_calc ? '<span class="id">' + Fmt.esc(r.Project_id_calc) + '</span>' : ''],
+            ['Năm / Quý', Fmt.esc(r.Year) + ' ' + Fmt.esc(r.Quarter)]])
+            : '<div class="empty">Chưa có kết quả. Khi ghi Won / Lost / Cancelled, trạng thái báo giá tự cập nhật theo.</div>');
+        var b = el.querySelector('#rs');
+        if (b) b.onclick = function () { App.edit('LSB_Result_Lesson', r || {}, { defaults: { Quotation_code: code, Result_day: App.boot.today }, onSaved: reload, onDeleted: reload }); };
+      } },
+      { id: 'project', label: 'Dự án', count: d.project ? 1 : 0, render: function (el) {
+        var pj = d.project;
+        if (pj) {
+          el.innerHTML = UI.info([['Dự án', '<a data-pj="' + Fmt.esc(pj.Project_id) + '">' + Fmt.esc(pj.Project_name) + '</a> <span class="id">' + Fmt.esc(pj.Project_id) + '</span>'],
+            ['Trạng thái', UI.status(pj.Status)], ['Hợp đồng', Fmt.esc(pj.Contract_no)], ['Giá trị HĐ (USD)', Fmt.usd(pj.Contract_USD)],
+            ['Ngày HĐ', Fmt.date(pj.Contract_day)], ['Chênh HĐ – báo giá', Fmt.usd(Number(pj.Contract_USD || 0) - k.valueUSD)]]);
+          el.querySelector('[data-pj]').onclick = function () { App.go('project', { id: pj.Project_id }); };
+          return;
+        }
+        var html = q.Quotation_LSB_Code ? '<p class="muted">Chưa có dự án nào ghi Quotation_LSB-Code = ' + Fmt.esc(q.Quotation_LSB_Code) + '.</p>'
+          : '<p class="muted">Báo giá chưa có Quotation_LSB_Code (mã nội bộ) — dự án nối với báo giá bằng mã này.</p>';
+        if (canW && q.Status === 'Won') {
+          html += d.customer ? '<button class="btn accent" id="mk-p">Tạo dự án từ báo giá</button>'
+            : '<p>Lead chưa là khách hàng — tạo khách hàng trước.</p><button class="btn accent" id="mk-c">Mở lead để tạo khách hàng</button>';
+        } else if (q.Status !== 'Won') html += '<p class="muted small">Tạo dự án khi báo giá ở trạng thái Won.</p>';
+        el.innerHTML = html;
+        var mp = el.querySelector('#mk-p');
+        if (mp) mp.onclick = function () {
+          App.edit('LSB_project', {}, { defaults: { Customer_id: d.customer.Customer_id, 'Quotation_LSB-Code': q.Quotation_LSB_Code, Project_name: q.Project_name,
+            Project_address: q.Address, Project_owner: q.Quotation_owner, Project_Maincons: q.Quotation_Maincons, Project_Consultant: q.Quotation_Consultant,
+            Incoterm: q.Incoterm, Tonnage_EST: q.Tonnage, Contract_USD: q.Value_USD, Status: 'Kick-off', RAD_Revision: 0 },
+            onSaved: function (r) { App.go('project', { id: r.Project_id }); } });
+        };
+        var mc = el.querySelector('#mk-c');
+        if (mc) mc.onclick = function () { App.go('lead', { id: q.Lead_id }); };
+      } }
+    ];
+    if (App.can('activity')) tabs.push({ id: 'log', label: 'Nhật ký', count: d.activity.length, render: function (el) {
+      el.innerHTML = UI.activityList(d.activity);
+    } });
+    UI.tabs(view.querySelector('#tabs'), tabs, p.tab);
+  }
+};
+</script>

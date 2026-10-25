@@ -1,0 +1,477 @@
+<script>
+/**
+ * Dashboard.html — v2.6: 4 tab Tổng quan (BGĐ) · Công nợ & thu tiền (Kế toán) · Sản xuất & giao hàng (PM) ·
+ * Khách hàng & thị trường (Sales), bộ lọc Năm/Quý · Khách hàng · Trạng thái DA · Quốc gia, nút USD/VND.
+ * Dữ liệu: dashboard.get (04_Project.gs → metrics theo quý + board) và notification.list (Notification.gs).
+ * Đổi tab / bộ lọc / tiền tệ / cửa sổ ngày → vẽ lại tại trình duyệt; chỉ đổi Năm mới gọi lại server.
+ *
+ * Quy ước số liệu:
+ *  - Số theo kỳ: HĐ ký theo Contract_day, đã thu theo Payment_day, chi phí theo Invoice_code, tấn đã xuất theo ETD_actual.
+ *  - Số tại hôm nay: còn phải thu, quá hạn (Pay_status = Overdue), đến hạn trong N ngày, tình trạng lô hàng.
+ *  - Tình trạng lô suy ra từ mốc ngày (LSB_shipment không có cột trạng thái).
+ */
+var Dash = {
+  WIN: [7, 14, 30, 60],
+  TABS: ['ov', 'ar', 'pr', 'cu'],
+  st: { tab: 'ov', cur: 'USD', win: 30, q: 'all', cus: 'all', status: 'all', nat: 'all', open: {} },
+  load: function () {
+    try {
+      var v = JSON.parse(localStorage.getItem('lsb.dash') || '{}');
+      if (Dash.TABS.indexOf(v.tab) >= 0) Dash.st.tab = v.tab;
+      if (v.cur === 'USD' || v.cur === 'VND') Dash.st.cur = v.cur;
+      if (Dash.WIN.indexOf(v.win) >= 0) Dash.st.win = v.win;
+    } catch (e) { /* bỏ qua */ }
+  },
+  save: function () {
+    try { localStorage.setItem('lsb.dash', JSON.stringify({ tab: Dash.st.tab, cur: Dash.st.cur, win: Dash.st.win })); } catch (e) { /* bỏ qua */ }
+  }
+};
+Dash.load();
+
+/* ------------------------------ Tiện ích ------------------------------ */
+Dash.days = function (a, b) {
+  var x = String(a || '').match(/^(\d{4})-(\d{2})-(\d{2})/), y = String(b || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!x || !y) return null;
+  return Math.round((Date.UTC(+y[1], +y[2] - 1, +y[3]) - Date.UTC(+x[1], +x[2] - 1, +x[3])) / 864e5);
+};
+Dash.money = function (usd, compact) {
+  usd = Number(usd) || 0;
+  if (Dash.st.cur === 'VND') {
+    var v = usd * Dash.b.fx;
+    return compact ? (v / 1e9).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + L(' tỷ ₫', 'B ₫') : Math.round(v / 1e6).toLocaleString('vi-VN');
+  }
+  return compact ? '$' + Fmt.compact(usd) : Fmt.usd(usd);
+};
+Dash.curHead = function () { return Dash.st.cur === 'VND' ? L('(triệu ₫)', '(million ₫)') : '(USD)'; };
+Dash.pct = function (a, b) { return b ? Math.round(a / b * 100) + '%' : '—'; };
+Dash.ton = function (t) { return Fmt.num(Number(t) || 0, 0) + ' t'; };
+Dash.sum = function (arr, f) { return arr.reduce(function (s, x) { return s + (Number(f(x)) || 0); }, 0); };
+Dash.inPeriod = function (d) {
+  if (!d) return false;
+  var y = Dash.year;
+  if (y === 'all') return true;
+  if (String(d).slice(0, 4) !== String(y)) return false;
+  return Dash.st.q === 'all' || Math.ceil(+String(d).slice(5, 7) / 3) === +Dash.st.q;
+};
+Dash.periodName = function () {
+  if (Dash.year === 'all') return L('mọi kỳ', 'all periods');
+  return Dash.st.q === 'all' ? L('năm ', 'year ') + Dash.year : 'Q' + Dash.st.q + '/' + Dash.year;
+};
+
+/* Tình trạng lô hàng — suy ra từ mốc ngày, mốc sau thắng mốc trước. */
+Dash.SH = function (k) {
+  return {
+    pln: [L('Chưa sản xuất', 'Not started'), ''], fab: [L('Đang sản xuất', 'In fabrication'), 'blue'],
+    rdy: [L('Chờ xuất', 'Awaiting shipment'), 'warn'], sea: [L('Đang vận chuyển', 'In transit'), 'blue'], arr: [L('Đã đến cảng', 'Arrived'), 'ok']
+  }[k];
+};
+Dash.shState = function (s) {
+  var t = Dash.b.today;
+  function hit(d) { return !!d && d <= t; }
+  if (hit(s.etaA)) return 'arr';
+  if (hit(s.etdA)) return 'sea';
+  if (hit(s.cFab)) return 'rdy';
+  if (hit(s.sFab)) return 'fab';
+  return 'pln';
+};
+Dash.shBadge = function (s) { var x = Dash.SH(Dash.shState(s)); return UI.badge(x[0], x[1]); };
+
+Dash.PAY = { Paid: 'ok', Overdue: 'danger', Partial: 'warn', Open: 'blue' };
+Dash.soon = function (p) {
+  if (!(p.st === 'Open' || p.st === 'Partial') || !p.due) return false;
+  var d = Dash.days(Dash.b.today, p.due);
+  return d !== null && d >= 0 && d <= Dash.st.win;
+};
+Dash.payBadge = function (p) {
+  return UI.badge(p.st, Dash.PAY[p.st]) + (Dash.soon(p) ? ' ' + UI.badge(L('sắp đến hạn', 'due soon'), 'warn') : '');
+};
+
+/* ------------------------------ Tổng hợp ------------------------------ */
+Dash.agg = function () {
+  var b = Dash.b, st = Dash.st;
+  var cus = {}; b.customers.forEach(function (c) { cus[c.id] = c; });
+  var ps = b.projects.filter(function (p) {
+    return (st.cus === 'all' || p.cus === st.cus) && (st.status === 'all' || p.status === st.status) &&
+      (st.nat === 'all' || (cus[p.cus] || {}).nation === st.nat);
+  });
+  var ids = {}; ps.forEach(function (p) { ids[p.id] = true; });
+  var planIdx = {}; b.plans.forEach(function (p) { planIdx[p.id] = p; });
+  var pps = b.plans.filter(function (p) { return ids[p.pj]; });
+  var paid = b.paid.filter(function (x) { var p = planIdx[x.pp]; return p && ids[p.pj]; });
+  var signed = ps.filter(function (p) { return Dash.inPeriod(p.cday); });
+  var over = pps.filter(function (p) { return p.st === 'Overdue'; }), soon = pps.filter(Dash.soon);
+  return {
+    cus: cus, ps: ps, ids: ids, planIdx: planIdx, pps: pps, paid: paid, signed: signed, over: over, soon: soon,
+    shs: b.shipments.filter(function (s) { return ids[s.pj]; }),
+    costs: b.costs.filter(function (c) { return ids[c.pj]; }),
+    contractAll: Dash.sum(ps, function (p) { return p.usd; }),
+    contractSigned: Dash.sum(signed, function (p) { return p.usd; }),
+    paidAll: Dash.sum(paid, function (x) { return x.usd; }),
+    paidPeriod: Dash.sum(paid.filter(function (x) { return Dash.inPeriod(x.day); }), function (x) { return x.usd; }),
+    overUSD: Dash.sum(over, function (p) { return p.bal; }),
+    soonUSD: Dash.sum(soon, function (p) { return p.bal; })
+  };
+};
+Dash.cusName = function (a, id) { return (a.cus[id] || {}).name || id || ''; };
+Dash.prj = function (id) { return Dash.b.projects.filter(function (p) { return p.id === id; })[0] || { id: id, name: id }; };
+Dash.ship = function (id) { return Dash.b.shipments.filter(function (s) { return s.id === id; })[0]; };
+
+/* Kiểm tra dữ liệu — điểm lệch cần sửa trong Sheet. */
+Dash.checks = function (a) {
+  var out = [];
+  Dash.b.paid.forEach(function (x) {
+    if (!a.planIdx[x.pp]) out.push(['danger', '<b>' + Fmt.esc(x.id) + '</b> (' + Fmt.usd(x.usd) + ' USD, ' + Fmt.date(x.day) + L(') trỏ tới <b>', ') points to <b>') +
+      Fmt.esc(x.pp || '—') + L('</b> không có trong LSB_payment_plan → không được tính vào đã thu.', '</b>, which is not in LSB_payment_plan → not counted as collected.')]);
+  });
+  a.ps.forEach(function (p) {
+    var mine = Dash.b.plans.filter(function (x) { return x.pj === p.id; });
+    var plan = Dash.sum(mine, function (x) { return x.usd; });
+    if (mine.length && Math.abs(plan - p.usd) > 1) out.push(['warn', '<b>' + Fmt.esc(p.id) + L('</b>: tổng kế hoạch thanh toán ', '</b>: total payment plan ') +
+      Fmt.usd(plan) + L(' ≠ giá trị HĐ ', ' ≠ contract value ') + Fmt.usd(p.usd) + ' (' + Dash.pct(plan, p.usd) + ').']);
+    mine.forEach(function (x) {
+      if (x.pct && p.usd && Math.abs(x.usd - p.usd * x.pct) > 1) out.push(['warn', '<b>' + Fmt.esc(x.id) + '</b>: Payment_pct ' + Math.round(x.pct * 100) +
+        L('% × HĐ = ', '% × contract = ') + Fmt.usd(p.usd * x.pct) + L(', nhưng Payment_USD = ', ', but Payment_USD = ') + Fmt.usd(x.usd) + '.']);
+    });
+    var cost = Dash.sum(Dash.b.costs.filter(function (c) { return c.pj === p.id && c.st !== 'Planned'; }), function (c) { return c.usd; });
+    if (p.usd && cost > p.usd) out.push(['warn', '<b>' + Fmt.esc(p.id) + L('</b>: chi phí thực tế ', '</b>: actual cost ') + Fmt.usd(cost) + L(' lớn hơn giá trị HĐ ', ' exceeds contract value ') + Fmt.usd(p.usd) + '.']);
+    var t = Dash.sum(Dash.b.shipments.filter(function (s) { return s.pj === p.id; }), function (s) { return s.t; });
+    if (p.tAct && t && Math.abs(t - p.tAct) > 0.5) out.push(['warn', '<b>' + Fmt.esc(p.id) + '</b>: Tonnage_Actual ' + Dash.ton(p.tAct) + L(' khác tổng tấn các lô ', ' differs from total shipment tons ') + Dash.ton(t) + '.']);
+  });
+  return out;
+};
+
+/* ------------------------------ Khối dùng chung ------------------------------ */
+Dash.how = function (items) {
+  return '<details class="dash-how"><summary>' + L('Cách tính', 'How it is calculated') + '</summary><ul>' +
+    items.map(function (i) { return '<li>' + i + '</li>'; }).join('') + '</ul></details>';
+};
+Dash.winSeg = function () {
+  return '<div class="seg">' + Dash.WIN.map(function (n) {
+    return '<button data-win="' + n + '" class="' + (Dash.st.win === n ? 'on' : '') + '">' + n + L(' ngày', ' days') + '</button>';
+  }).join('') + '</div>';
+};
+Dash.go = function (pj, tab) { return ' data-go="' + Fmt.esc(pj) + '" data-tab="' + tab + '"'; };
+Dash.bar = function (a, b) {
+  return '<div class="dash-pbar"><div class="bar ok"><i style="width:' + (b ? Math.min(100, a / b * 100) : 0).toFixed(1) + '%"></i></div><span>' + Dash.pct(a, b) + '</span></div>';
+};
+
+Dash.dueTable = function (a, mode) {
+  var rows = (mode === 'over' ? a.over : a.soon).slice().sort(function (x, y) { return String(x.due || '').localeCompare(String(y.due || '')); });
+  if (!rows.length) return '<div class="table-wrap"><div class="empty">' + (mode === 'over' ? L('Không có đợt nào quá hạn.', 'No overdue milestones.') :
+    L('Không có đợt nào đến hạn trong ', 'No milestones due in the next ') + Dash.st.win + L(' ngày tới.', ' days.')) + '</div></div>';
+  return '<div class="table-wrap"><table class="tbl"><thead><tr><th>Due_day</th><th>' + L('Dự án · Lô · Khách hàng', 'Project · Shipment · Customer') + '</th><th>' + L('Đợt', 'Milestone') +
+    '</th><th class="num">' + L('Phải thu ', 'Amount ') + Dash.curHead() + '</th><th class="num">' + L('Đã thu', 'Collected') + '</th><th class="num">' + L('Còn lại', 'Balance') +
+    '</th><th>' + (mode === 'over' ? L('Quá hạn', 'Overdue') : L('Còn', 'Due in')) + '</th><th>' + L('Hồ sơ cần', 'Required docs') + '</th></tr></thead><tbody>' +
+    rows.map(function (pp) {
+      var p = Dash.prj(pp.pj), sh = pp.sh && Dash.ship(pp.sh), d = Dash.days(Dash.b.today, pp.due);
+      return '<tr class="click"' + Dash.go(p.id, 'pay') + '><td class="nowrap">' + Fmt.date(pp.due) + '</td><td>' + Fmt.esc(p.name) +
+        '<div class="small muted"><span class="id">' + Fmt.esc(p.id) + '</span> · ' + (sh ? L('Lô ', 'Shipment ') + Fmt.esc(sh.no) + (sh.code ? ' (' + Fmt.esc(sh.code) + ')' : '') : L('Chung dự án', 'Project-level')) +
+        ' · ' + Fmt.esc(Dash.cusName(a, p.cus)) + '</div></td><td>' + Fmt.esc(pp.code || '') + (pp.pct ? ' ' + Math.round(pp.pct * 100) + '%' : '') + '<div class="id">' + Fmt.esc(pp.id) + '</div></td>' +
+        '<td class="num">' + Dash.money(pp.usd) + '</td><td class="num">' + Dash.money(pp.col) + '</td><td class="num"><b>' + Dash.money(pp.bal) + '</b></td><td>' +
+        (mode === 'over' ? UI.badge((d === null ? '' : -d) + L(' ngày', ' days'), 'danger') : UI.badge(d + L(' ngày', ' days'), 'warn')) +
+        '</td><td class="small">' + Fmt.esc(pp.docs || '—') + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+};
+
+/* ------------------------------ Tab Tổng quan ------------------------------ */
+Dash.vOverview = function (a, d, alerts, p) {
+  var costAct = Dash.sum(a.costs.filter(function (c) { return c.st !== 'Planned' && Dash.inPeriod(c.day); }), function (c) { return c.usd; });
+  var costPlanned = Dash.sum(a.costs.filter(function (c) { return c.st === 'Planned'; }), function (c) { return c.usd; });
+  var gmE = a.contractAll ? Dash.sum(a.ps, function (x) { return x.usd * (x.gmE || 0); }) / a.contractAll : null;
+  var withA = a.ps.filter(function (x) { return x.gmA !== null && x.gmA !== undefined; });
+  var gmA = withA.length ? Dash.sum(withA, function (x) { return x.usd * x.gmA; }) / (Dash.sum(withA, function (x) { return x.usd; }) || 1) : null;
+  var tShip = Dash.sum(a.shs.filter(function (s) { return Dash.inPeriod(s.etdA); }), function (s) { return s.t; });
+  var fab = a.shs.filter(function (s) { return Dash.shState(s) === 'fab'; });
+  var rest = a.contractAll - a.paidAll, per = Dash.periodName();
+  var bk = d.bidding;
+  return UI.kpis([
+    { label: L('Hợp đồng ký ', 'Contracts signed ') + per, value: Dash.money(a.contractSigned, true), sub: a.signed.length + L(' dự án · theo Contract_day', ' projects · by Contract_day'), tone: 'accent' },
+    { label: L('Đã thu ', 'Collected ') + per, value: Dash.money(a.paidPeriod, true), sub: L('theo Payment_day', 'by Payment_day'), tone: 'ok' },
+    { label: L('Còn phải thu', 'Receivable'), value: Dash.money(rest, true), sub: L('hôm nay · đã thu ', 'today · collected ') + Dash.pct(a.paidAll, a.contractAll) + L(' giá trị HĐ', ' of contract value') +
+      '<div class="bar ok" style="margin-top:6px"><i style="width:' + (a.contractAll ? Math.min(100, a.paidAll / a.contractAll * 100) : 0).toFixed(1) + '%"></i></div>' },
+    { label: L('Quá hạn', 'Overdue'), value: Dash.money(a.overUSD, true), sub: a.over.length + L(' đợt Overdue', ' overdue milestones'), tone: a.over.length ? 'danger' : '' },
+    { label: L('Đến hạn ', 'Due in ') + Dash.st.win + L(' ngày tới', ' days'), value: Dash.money(a.soonUSD, true), sub: a.soon.length + L(' đợt', ' milestones'), tone: a.soon.length ? 'warn' : '' }
+  ]) + UI.kpis([
+    { label: L('Chi phí ', 'Costs ') + per, value: Dash.money(costAct, true), sub: L('Invoiced + Paid · còn ', 'Invoiced + Paid · ') + Dash.money(costPlanned, true) + L(' Planned', ' still Planned') },
+    { label: L('Biên LN dự kiến', 'Planned gross margin'), value: gmE === null ? '—' : Fmt.pct(gmE, 1), sub: L('Grossmargin_EST, bình quân theo HĐ', 'Grossmargin_EST, contract-weighted') },
+    { label: L('Biên LN thực tế', 'Actual gross margin'), value: gmA === null ? '—' : Fmt.pct(gmA, 1), sub: withA.length + L(' dự án đã nhập Grossmargin_Actual', ' projects with Grossmargin_Actual') },
+    { label: L('Sản lượng', 'Tonnage'), value: Dash.ton(Dash.sum(a.ps, function (x) { return x.tAct; })),
+      sub: L('kế hoạch ', 'planned ') + Dash.ton(Dash.sum(a.ps, function (x) { return x.tEst; })) + L(' · xuất ', ' · shipped ') + per + ' ' + Dash.ton(tShip) },
+    { label: L('Đang sản xuất', 'In fabrication'), value: Dash.ton(Dash.sum(fab, function (s) { return s.t; })), sub: fab.length + L(' lô hàng', ' shipments') }
+  ]) + (bk ? UI.kpis([
+    { label: L('Pipeline báo giá', 'Quotation pipeline'), value: Fmt.compact(bk.pipelineUSD) + ' USD', sub: bk.openQuotations + L(' báo giá đang chào', ' open quotations'), tone: 'accent' },
+    { label: L('Pipeline có trọng số', 'Weighted pipeline'), value: Fmt.compact(bk.weightedUSD) + ' USD', sub: 'Value × Win_probability' },
+    { label: L('Tỷ lệ thắng ', 'Win rate ') + d.year, value: bk.winRate === null ? '—' : Fmt.pct(bk.winRate, 0) },
+    { label: L('Việc thầu trễ', 'Overdue bid tasks'), value: bk.overdueBidTasks, tone: bk.overdueBidTasks ? 'warn' : '' }
+  ]) : '') +
+    '<div class="card"><div class="card-head"><h3>' + L('Dòng tiền theo tháng ', 'Monthly cash flow ') + Dash.chartYear() + '</h3><div class="dash-legend"><span><i class="plan"></i>' +
+    L('Kế hoạch thu', 'Planned') + '</span><span><i class="paid"></i>' + L('Đã thu', 'Collected') + '</span></div></div>' + Dash.cashChart(a) +
+    Dash.how([L('Kế hoạch thu = tổng <code>LSB_payment_plan.Payment_USD</code> theo tháng của <code>Due_day</code>.', 'Planned = sum of <code>LSB_payment_plan.Payment_USD</code> by month of <code>Due_day</code>.'),
+      L('Đã thu = tổng <code>LSB_paid.Paid_USD</code> theo tháng của <code>Payment_day</code>.', 'Collected = sum of <code>LSB_paid.Paid_USD</code> by month of <code>Payment_day</code>.')]) + '</div>' +
+    '<div class="card"><div class="card-head"><h3>' + L('Quá hạn', 'Overdue') + '</h3><span class="small muted">' + L('Bấm dòng → Dự án 360° › Thanh toán', 'Click a row → Project 360° › Payments') + '</span></div>' + Dash.dueTable(a, 'over') + '</div>' +
+    '<div class="card"><div class="card-head"><h3>' + L('Đến hạn sắp tới', 'Coming due') + '</h3>' + Dash.winSeg() + '</div>' + Dash.dueTable(a, 'soon') + '</div>' +
+    '<div class="card" id="alerts"><div class="card-head"><h3>' + L('Cảnh báo (', 'Alerts (') + alerts.counts.total + ')</h3>' +
+    '<label class="small"><input type="checkbox" id="mine"' + (p.mine ? ' checked' : '') + L('> Chỉ việc của tôi</label></div>', '> My items only</label></div>') + UI.alertList(alerts.rows, 40) + '</div>' +
+    Dash.quarterCard(d) +
+    '<div class="card">' + Dash.how([
+      L('Số theo kỳ (đổi theo Năm/Quý): HĐ ký theo <code>Contract_day</code>; đã thu theo <code>Payment_day</code>; chi phí theo <code>Invoice_code</code>; tấn đã xuất theo <code>ETD_actual</code>.',
+        'Period figures (follow Year/Quarter): contracts by <code>Contract_day</code>; collected by <code>Payment_day</code>; costs by <code>Invoice_code</code>; tons shipped by <code>ETD_actual</code>.'),
+      L('Số tại hôm nay (không theo kỳ): còn phải thu = Contract_USD − tổng đã thu; quá hạn = Balance của các đợt <code>Pay_status</code> = Overdue.',
+        'As-of-today figures (ignore the period): receivable = Contract_USD − total collected; overdue = balance of milestones with <code>Pay_status</code> = Overdue.'),
+      L('Chi phí thực tế = <code>Cost_USD</code> có <code>Cost_status</code> Invoiced hoặc Paid; Planned hiện riêng.', 'Actual cost = <code>Cost_USD</code> with <code>Cost_status</code> Invoiced or Paid; Planned shown separately.'),
+      L('Biên LN lấy từ <code>Grossmargin_EST</code> / <code>Grossmargin_Actual</code> người dùng nhập.', 'Gross margins come from the entered <code>Grossmargin_EST</code> / <code>Grossmargin_Actual</code>.'),
+      L('Đang sản xuất = lô có <code>Start_Fab</code> ≤ hôm nay và chưa có <code>Completed_Fab</code>.', 'In fabrication = shipments with <code>Start_Fab</code> ≤ today and no <code>Completed_Fab</code>.')]) + '</div>';
+};
+Dash.chartYear = function () { return Dash.year === 'all' ? Dash.b.today.slice(0, 4) : String(Dash.year); };
+Dash.cashChart = function (a) {
+  var yr = Dash.chartYear(), plan = [], paid = [], m;
+  for (m = 0; m < 12; m++) { plan.push(0); paid.push(0); }
+  a.pps.forEach(function (pp) { if (String(pp.due || '').slice(0, 4) === yr) plan[+pp.due.slice(5, 7) - 1] += pp.usd; });
+  a.paid.forEach(function (x) { if (String(x.day || '').slice(0, 4) === yr) paid[+x.day.slice(5, 7) - 1] += x.usd; });
+  var mx = Math.max.apply(null, plan.concat(paid).concat([1]));
+  var p10 = Math.pow(10, Math.floor(Math.log10(mx / 4))), n = mx / 4 / p10, step = (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p10, top = Math.ceil(mx / step) * step;
+  var W = 760, H = 230, Lx = 62, B = 26, T = 10, cw = (W - Lx - 8) / 12;
+  function h(v) { return (H - B - T) * v / top; }
+  function lab(v) { return Dash.st.cur === 'VND' ? (v * Dash.b.fx / 1e9).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + L(' tỷ', 'B') : '$' + Fmt.compact(v); }
+  var g = '', v, curM = Dash.b.today.slice(0, 4) === yr ? +Dash.b.today.slice(5, 7) - 1 : -1;
+  for (v = 0; v <= top + 1e-9; v += step) {
+    var y = H - B - h(v);
+    g += '<line x1="' + Lx + '" x2="' + (W - 8) + '" y1="' + y + '" y2="' + y + '" class="grid"/><text x="' + (Lx - 6) + '" y="' + (y + 4) + '" text-anchor="end">' + lab(v) + '</text>';
+  }
+  for (m = 0; m < 12; m++) {
+    var x = Lx + m * cw + cw * 0.14, bw = cw * 0.34;
+    g += '<rect class="plan" x="' + x + '" y="' + (H - B - h(plan[m])) + '" width="' + bw + '" height="' + h(plan[m]) + '" rx="2"><title>T' + (m + 1) + ': ' + L('kế hoạch ', 'planned ') + Dash.money(plan[m]) + '</title></rect>';
+    g += '<rect class="paid" x="' + (x + bw + 2) + '" y="' + (H - B - h(paid[m])) + '" width="' + bw + '" height="' + h(paid[m]) + '" rx="2"><title>T' + (m + 1) + ': ' + L('đã thu ', 'collected ') + Dash.money(paid[m]) + '</title></rect>';
+    g += '<text x="' + (Lx + m * cw + cw / 2) + '" y="' + (H - 8) + '" text-anchor="middle"' + (m === curM ? ' class="cur"' : '') + '>' + L('T', 'M') + (m + 1) + '</text>';
+  }
+  return '<div class="table-wrap dash-chart"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + L('Kế hoạch thu và đã thu theo tháng', 'Planned vs collected by month') + '">' + g + '</svg></div>';
+};
+Dash.quarterCard = function (d) {
+  var m = d.metrics, s = d.snapshot;
+  var rows = [[L('Lead mới', 'New leads'), m.leads, 'n'], [L('Khách hàng mới', 'New customers'), m.customers, 'n'], [L('Hợp đồng ký (số)', 'Contracts signed (count)'), m.contracts, 'n'],
+    [L('Hợp đồng ký (USD)', 'Contracts signed (USD)'), m.contractUSD, 'usd'], [L('Tiền đã thu (USD)', 'Collected (USD)'), m.collectedUSD, 'usd'],
+    [L('Chi phí (USD)', 'Costs (USD)'), m.costUSD, 'usd'], [L('Tấn đã xuất', 'Tons shipped'), m.shippedTon, 't'], [L('Bài học dự án', 'Project lessons'), m.lessons, 'n']];
+  function f(v, k) { return k === 'usd' ? Fmt.usd(v) : Fmt.num(v, k === 't' ? 1 : 0); }
+  var maxS = Math.max.apply(null, Object.keys(s.projectsByStatus).map(function (k) { return s.projectsByStatus[k]; }).concat([1]));
+  return '<details class="card dash-q"><summary><b>' + L('Bảng theo quý ', 'Quarterly table ') + d.year + L(' · dự án theo trạng thái', ' · projects by status') + '</b></summary>' +
+    '<div class="row" style="margin-top:12px"><div class="col" style="flex:2 1 520px"><div class="table-wrap"><table class="tbl qtable"><thead><tr><th>' + L('Chỉ số', 'Metric') + '</th>' +
+    d.quarters.map(function (q) { return '<th class="num">' + q + '</th>'; }).join('') + '<th class="num">' + L('Cả năm', 'Full year') + '</th></tr></thead><tbody>' +
+    rows.map(function (r) {
+      return '<tr><td>' + r[0] + '</td>' + d.quarters.map(function (q) { return '<td class="num">' + f(r[1][q], r[2]) + '</td>'; }).join('') + '<td class="num"><b>' + f(r[1].total, r[2]) + '</b></td></tr>';
+    }).join('') + '</tbody></table></div></div><div class="col"><div class="status-bars">' +
+    Object.keys(s.projectsByStatus).map(function (k) {
+      var n = s.projectsByStatus[k];
+      return '<div class="sb"><span>' + UI.status(k) + '</span><div class="bar ' + (k === 'Closed' ? 'ok' : '') + '"><i style="width:' + (n / maxS * 100) + '%"></i></div><span class="right">' + n + '</span></div>';
+    }).join('') + '</div></div></div></details>';
+};
+
+/* ------------------------------ Tab Công nợ ------------------------------ */
+Dash.vAR = function (a) {
+  var plan = Dash.sum(a.pps, function (p) { return p.usd; }), ck = Dash.checks(a);
+  return UI.kpis([
+    { label: L('Kế hoạch thu', 'Planned collections'), value: Dash.money(plan, true), sub: a.pps.length + L(' đợt', ' milestones') },
+    { label: L('Đã thu', 'Collected'), value: Dash.money(a.paidAll, true), sub: Dash.pct(a.paidAll, plan) + L(' kế hoạch', ' of plan'), tone: 'ok' },
+    { label: L('Quá hạn', 'Overdue'), value: Dash.money(a.overUSD, true), sub: a.over.length + L(' đợt', ' milestones'), tone: a.over.length ? 'danger' : '' },
+    { label: L('Đến hạn ', 'Due in ') + Dash.st.win + L(' ngày tới', ' days'), value: Dash.money(a.soonUSD, true), sub: a.soon.length + L(' đợt', ' milestones'), tone: a.soon.length ? 'warn' : '' }
+  ]) + (ck.length ? '<div class="card"><div class="card-head"><h3>' + L('Kiểm tra dữ liệu', 'Data check') + '</h3><span class="small muted">' + ck.length +
+    L(' điểm cần sửa trong Sheet — số liệu bên dưới có thể lệch cho tới khi sửa', ' items to fix in the Sheet — figures below may be off until fixed') + '</span></div><ul class="dash-chk">' +
+    ck.map(function (c) { return '<li>' + UI.badge(c[0] === 'danger' ? L('Lỗi', 'Error') : L('Lệch', 'Mismatch'), c[0]) + '<span>' + c[1] + '</span></li>'; }).join('') + '</ul></div>' : '') +
+    '<div class="card"><div class="card-head"><h3>' + L('Quá hạn', 'Overdue') + '</h3><span class="small muted">' + L('Sắp theo hạn cũ nhất', 'Oldest first') + '</span></div>' + Dash.dueTable(a, 'over') + '</div>' +
+    '<div class="card"><div class="card-head"><h3>' + L('Đến hạn thanh toán', 'Coming due') + '</h3>' + Dash.winSeg() + '</div>' + Dash.dueTable(a, 'soon') + '</div>' +
+    '<div class="card"><div class="card-head"><h3>' + L('Thu tiền theo Dự án → Lô hàng → Đợt', 'Collections by Project → Shipment → Milestone') + '</h3>' +
+    '<button class="btn sm" data-tree="open">' + L('Mở tất cả', 'Expand all') + '</button><button class="btn sm" data-tree="close">' + L('Thu gọn', 'Collapse') + '</button></div>' +
+    Dash.tree(a) + Dash.how([
+      L('Dự án: Contract_USD, Kế hoạch = tổng Payment_USD, Đã thu = tổng Collected_USD, Còn lại = HĐ − Đã thu.', 'Project: Contract_USD, Plan = sum of Payment_USD, Collected = sum of Collected_USD, Balance = contract − collected.'),
+      L('Lô: các đợt có <code>Shipping_id</code> = lô đó. Đợt không gắn lô (Deposit, Retention…) nằm ở nhánh <b>Chung dự án</b>.', 'Shipment: milestones whose <code>Shipping_id</code> is that shipment. Milestones without a shipment (Deposit, Retention…) sit under <b>Project-level</b>.'),
+      L('Dưới mỗi đợt là từng lần thu trong <code>LSB_paid</code> (Paid_id · Invoice_no · Payment_day · Paid_USD).', 'Under each milestone are its receipts in <code>LSB_paid</code> (Paid_id · Invoice_no · Payment_day · Paid_USD).'),
+      L('Trạng thái = <code>Pay_status</code> (Paid / Overdue / Partial / Open), app tính lại như công thức trong Sheet; nhãn "sắp đến hạn" theo cửa sổ ngày.', 'Status = <code>Pay_status</code> (Paid / Overdue / Partial / Open), recomputed like the Sheet formula; "due soon" follows the day window.')]) + '</div>';
+};
+Dash.tree = function (a) {
+  var r = '';
+  a.ps.forEach(function (p) {
+    var rows = a.pps.filter(function (x) { return x.pj === p.id; });
+    var plan = Dash.sum(rows, function (x) { return x.usd; }), got = Dash.sum(rows, function (x) { return x.col; });
+    var open = !!Dash.st.open[p.id], over = rows.some(function (x) { return x.st === 'Overdue'; });
+    r += '<tr class="lv1 click" data-tog="' + Fmt.esc(p.id) + '"><td><span class="tw">' + (open ? '▾' : '▸') + '</span> <b>' + Fmt.esc(p.name) + '</b> <span class="id">' + Fmt.esc(p.id) + '</span>' +
+      (p.code ? ' <span class="small muted">' + Fmt.esc(p.code) + '</span>' : '') + '</td><td class="num">' + Dash.money(p.usd) + '</td><td class="num' + (rows.length && Math.abs(plan - p.usd) > 1 ? ' dash-warn" title="' + L('Kế hoạch ≠ HĐ', 'Plan ≠ contract') : '') + '">' +
+      Dash.money(plan) + '</td><td class="num">' + Dash.money(got) + '</td><td class="num">' + Dash.money(p.usd - got) + '</td><td>' + Dash.bar(got, p.usd) + '</td><td>' + (over ? UI.badge(L('Có quá hạn', 'Has overdue'), 'danger') : '') + '</td></tr>';
+    if (!open) return;
+    var groups = [{ k: '', label: L('Chung dự án', 'Project-level'), sub: '<span class="small muted">' + L('không gắn lô', 'no shipment') + '</span>' }].concat(
+      Dash.b.shipments.filter(function (s) { return s.pj === p.id; }).map(function (s) {
+        return { k: s.id, label: L('Lô ', 'Shipment ') + Fmt.esc(s.no) + (s.code ? ' · ' + Fmt.esc(s.code) : ''), sub: Dash.shBadge(s) + ' <span class="small muted">ETD ' + Fmt.date(s.etdA || s.etdP) + '</span>' };
+      }));
+    groups.forEach(function (g) {
+      var gp = rows.filter(function (x) { return (x.sh || '') === g.k; });
+      if (!gp.length) return;
+      var gplan = Dash.sum(gp, function (x) { return x.usd; }), gpaid = Dash.sum(gp, function (x) { return x.col; });
+      r += '<tr class="lv2 click"' + Dash.go(p.id, g.k ? 'ship' : 'pay') + '><td><b>' + g.label + '</b> ' + g.sub + '</td><td></td><td class="num">' + Dash.money(gplan) + '</td><td class="num">' +
+        Dash.money(gpaid) + '</td><td class="num">' + Dash.money(gplan - gpaid) + '</td><td>' + Dash.bar(gpaid, gplan) + '</td><td></td></tr>';
+      gp.forEach(function (pp) {
+        var pays = Dash.b.paid.filter(function (x) { return x.pp === pp.id; }).map(function (x) {
+          return Fmt.esc(x.id) + ' · ' + Fmt.esc(x.inv || '') + ' · ' + Fmt.date(x.day) + ' · ' + Dash.money(x.usd);
+        }).join('<br>') || L('chưa có lần thu', 'no receipts yet');
+        r += '<tr class="lv3 click"' + Dash.go(p.id, 'pay') + '><td>' + Fmt.esc(pp.code || '') + (pp.pct ? ' ' + Math.round(pp.pct * 100) + '%' : '') + ' <span class="id">' + Fmt.esc(pp.id) + '</span> <span class="small muted">· ' +
+          L('hạn ', 'due ') + Fmt.date(pp.due) + (Number(pp.rev) > 1 ? ' · rev ' + Fmt.esc(pp.rev) : '') + '</span><div class="small muted">' + pays + '</div></td><td></td><td class="num">' + Dash.money(pp.usd) +
+          '</td><td class="num">' + Dash.money(pp.col) + '</td><td class="num">' + Dash.money(pp.bal) + '</td><td></td><td>' + Dash.payBadge(pp) + '</td></tr>';
+      });
+    });
+  });
+  return '<div class="table-wrap"><table class="tbl dash-tree"><thead><tr><th>' + L('Dự án / Lô / Đợt', 'Project / Shipment / Milestone') + '</th><th class="num">' + L('HĐ ', 'Contract ') + Dash.curHead() +
+    '</th><th class="num">' + L('Kế hoạch', 'Plan') + '</th><th class="num">' + L('Đã thu', 'Collected') + '</th><th class="num">' + L('Còn lại', 'Balance') + '</th><th>' + L('% thu', '% collected') +
+    '</th><th>Pay_status</th></tr></thead><tbody>' + (r || '<tr><td colspan="7" class="empty">' + L('Không có dự án nào khớp bộ lọc.', 'No projects match the filters.') + '</td></tr>') + '</tbody></table></div>';
+};
+
+/* ------------------------------ Tab Sản xuất ------------------------------ */
+Dash.vProd = function (a) {
+  var by = function (k) { return a.shs.filter(function (s) { return Dash.shState(s) === k; }); };
+  var fab = by('fab').sort(function (x, y) { return String(x.etdP || '9').localeCompare(String(y.etdP || '9')); });
+  var late = fab.filter(function (s) { return s.etdP && s.etdP < Dash.b.today; });
+  return UI.kpis(['pln', 'fab', 'rdy', 'sea', 'arr'].map(function (k) {
+    var l = by(k);
+    return { label: Dash.SH(k)[0], value: l.length + L(' lô', ' shipments'), sub: Dash.ton(Dash.sum(l, function (s) { return s.t; })), tone: k === 'fab' && late.length ? 'danger' : '' };
+  })) + '<div class="card"><div class="card-head"><h3>' + L('Lô hàng đang sản xuất', 'Shipments in fabrication') + '</h3><span class="small muted">' + fab.length + L(' lô · ', ' shipments · ') +
+    Dash.ton(Dash.sum(fab, function (s) { return s.t; })) + (late.length ? ' · <b class="dash-bad">' + late.length + L(' lô đã qua ETD_plan', ' past ETD_plan') + '</b>' : '') + '</span></div>' +
+    (fab.length ? '<div class="table-wrap"><table class="tbl"><thead><tr><th>' + L('Dự án', 'Project') + '</th><th>' + L('Lô', 'Shipment') + '</th><th>' + L('Khách hàng', 'Customer') +
+      '</th><th class="num">' + L('Tấn', 'Tons') + '</th><th class="num">' + L('Cont. KH', 'Cont. plan') + '</th><th>Start_Fab</th><th class="num">' + L('Đã SX', 'Running') + '</th><th>ETD_plan</th><th>' +
+      L('Còn tới ETD', 'To ETD') + '</th><th class="num">' + L('Đợt thu theo lô ', 'Milestones on shipment ') + Dash.curHead() + '</th></tr></thead><tbody>' +
+      fab.map(function (s) {
+        var p = Dash.prj(s.pj), d = s.etdP ? Dash.days(Dash.b.today, s.etdP) : null;
+        var v = Dash.sum(Dash.b.plans.filter(function (x) { return x.sh === s.id; }), function (x) { return x.usd; });
+        return '<tr class="click"' + Dash.go(p.id, 'ship') + '><td>' + Fmt.esc(p.name) + '<div class="id">' + Fmt.esc(p.id) + '</div></td><td>' + L('Lô ', 'Shipment ') + Fmt.esc(s.no) +
+          (s.code ? ' · ' + Fmt.esc(s.code) : '') + '<div class="id">' + Fmt.esc(s.id) + '</div></td><td>' + Fmt.esc(Dash.cusName(a, p.cus)) + '</td><td class="num">' + Fmt.num(s.t) +
+          '</td><td class="num">' + Fmt.esc(s.cPlan === null || s.cPlan === undefined ? '' : s.cPlan) + '</td><td class="nowrap">' + Fmt.date(s.sFab) + '</td><td class="num">' + Dash.days(s.sFab, Dash.b.today) + L(' ngày', ' days') +
+          '</td><td class="nowrap">' + Fmt.date(s.etdP) + '</td><td>' + (d === null ? '—' : d < 0 ? UI.badge(L('Trễ ', 'Late ') + (-d) + L(' ngày', ' days'), 'danger') :
+            UI.badge(d + L(' ngày', ' days'), d <= 14 ? 'warn' : '')) + '</td><td class="num">' + Dash.money(v) + '</td></tr>';
+      }).join('') + '</tbody></table></div>'
+      : '<div class="table-wrap"><div class="empty">' + L('Không có lô nào đang sản xuất (lô có Start_Fab mà chưa có Completed_Fab).', 'No shipments in fabrication (Start_Fab set, Completed_Fab empty).') + '</div></div>') +
+    Dash.how([
+      L('LSB_shipment không có cột trạng thái — app suy ra từ mốc ngày (mốc sau thắng mốc trước):', 'LSB_shipment has no status column — the app derives it from dates (later milestone wins):'),
+      L('<b>Chưa sản xuất</b>: chưa có <code>Start_Fab</code> · <b>Đang sản xuất</b>: Start_Fab ≤ hôm nay, chưa có <code>Completed_Fab</code> · <b>Chờ xuất</b>: đã Completed_Fab, chưa có <code>ETD_actual</code> · <b>Đang vận chuyển</b>: đã có ETD_actual, chưa tới <code>ETA_actual</code> · <b>Đã đến cảng</b>: ETA_actual ≤ hôm nay (trống thì ETD_actual + 14).',
+        '<b>Not started</b>: no <code>Start_Fab</code> · <b>In fabrication</b>: Start_Fab ≤ today, no <code>Completed_Fab</code> · <b>Awaiting shipment</b>: Completed_Fab set, no <code>ETD_actual</code> · <b>In transit</b>: ETD_actual set, before <code>ETA_actual</code> · <b>Arrived</b>: ETA_actual ≤ today (blank → ETD_actual + 14).'),
+      L('Còn tới ETD = <code>ETD_plan</code> − hôm nay; ≤ 14 ngày tô vàng; đã qua ETD_plan mà vẫn đang sản xuất tô đỏ.', 'To ETD = <code>ETD_plan</code> − today; ≤ 14 days amber; past ETD_plan while still in fabrication red.')]) + '</div>';
+};
+
+/* ------------------------------ Tab Khách hàng ------------------------------ */
+Dash.vCus = function (a) {
+  var seen = {}, rows = [];
+  a.signed.forEach(function (p) { seen[p.cus] = true; });
+  Object.keys(seen).forEach(function (cid) {
+    var ps = a.signed.filter(function (p) { return p.cus === cid; }), ids = {};
+    ps.forEach(function (p) { ids[p.id] = true; });
+    var pl = a.pps.filter(function (x) { return ids[x.pj]; }), c = a.cus[cid] || {};
+    var hd = Dash.sum(ps, function (p) { return p.usd; }), got = Dash.sum(pl, function (x) { return x.col; });
+    rows.push({ cid: cid, name: c.name || cid, nation: c.nation || '—', seg: c.seg || '—', n: ps.length, t: Dash.sum(ps, function (p) { return p.tEst; }),
+      hd: hd, paid: got, over: Dash.sum(pl.filter(function (x) { return x.st === 'Overdue'; }), function (x) { return x.bal; }) });
+  });
+  rows.sort(function (x, y) { return y.hd - x.hd; });
+  function group(key) {
+    var m = {};
+    rows.forEach(function (r) { var k = r[key]; m[k] = m[k] || { hd: 0, paid: 0 }; m[k].hd += r.hd; m[k].paid += r.paid; });
+    return Object.keys(m).map(function (k) { return [k, m[k]]; }).sort(function (x, y) { return y[1].hd - x[1].hd; });
+  }
+  var gN = group('nation'), gS = group('seg');
+  var mx = Math.max.apply(null, gN.concat(gS).map(function (e) { return e[1].hd; }).concat([1]));
+  function hb(g) {
+    if (!g.length) return '<div class="empty">' + L('Không có dữ liệu.', 'No data.') + '</div>';
+    return '<div class="dash-hbar">' + g.map(function (e) {
+      var v = e[1];
+      return '<div>' + Fmt.esc(e[0]) + '</div><div class="track" title="' + L('Đã thu ', 'Collected ') + Dash.money(v.paid) + ' / ' + Dash.money(v.hd) + '"><i class="paid" style="width:' +
+        (Math.min(v.paid, v.hd) / mx * 100).toFixed(1) + '%"></i><i class="plan" style="width:' + (Math.max(0, v.hd - v.paid) / mx * 100).toFixed(1) + '%"></i></div><div class="num">' + Dash.money(v.hd, true) + '</div>';
+    }).join('') + '</div>';
+  }
+  var lg = '<div class="dash-legend"><span><i class="paid"></i>' + L('Đã thu', 'Collected') + '</span><span><i class="plan"></i>' + L('Còn lại', 'Balance') + '</span></div>';
+  return '<div class="card"><div class="card-head"><h3>' + L('Doanh số hợp đồng theo khách hàng · ', 'Contract sales by customer · ') + Dash.periodName() + '</h3><span class="small muted">' +
+    L('Bấm dòng → Lead 360° của khách', 'Click a row → customer Lead 360°') + '</span></div>' +
+    (rows.length ? '<div class="table-wrap"><table class="tbl"><thead><tr><th>' + L('Khách hàng', 'Customer') + '</th><th>' + L('Quốc gia', 'Country') + '</th><th>' + L('Ngành', 'Segment') +
+      '</th><th class="num">' + L('Số DA', 'Projects') + '</th><th class="num">' + L('Tấn KH', 'Planned t') + '</th><th class="num">' + L('Giá trị HĐ ', 'Contract value ') + Dash.curHead() +
+      '</th><th class="num">' + L('Đã thu', 'Collected') + '</th><th class="num">' + L('Còn nợ', 'Outstanding') + '</th><th class="num">' + L('Quá hạn', 'Overdue') + '</th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        return '<tr class="click" data-cus="' + Fmt.esc(r.cid) + '"><td>' + Fmt.esc(r.name) + '<div class="id">' + Fmt.esc(r.cid) + '</div></td><td>' + Fmt.esc(r.nation) + '</td><td>' + Fmt.esc(r.seg) +
+          '</td><td class="num">' + r.n + '</td><td class="num">' + Fmt.num(r.t, 0) + '</td><td class="num">' + Dash.money(r.hd) + '</td><td class="num">' + Dash.money(r.paid) + '</td><td class="num">' +
+          Dash.money(r.hd - r.paid) + '</td><td class="num' + (r.over ? ' dash-bad' : '') + '">' + (r.over ? Dash.money(r.over) : '—') + '</td></tr>';
+      }).join('') + '</tbody></table></div>'
+      : '<div class="table-wrap"><div class="empty">' + L('Không có hợp đồng ký trong kỳ khớp bộ lọc.', 'No contracts signed in this period match the filters.') + '</div></div>') + '</div>' +
+    '<div class="row"><div class="col"><div class="card"><div class="card-head"><h3>' + L('Theo quốc gia', 'By country') + '</h3>' + lg + '</div>' + hb(gN) + '</div></div>' +
+    '<div class="col"><div class="card"><div class="card-head"><h3>' + L('Theo ngành', 'By segment') + '</h3>' + lg + '</div>' + hb(gS) + '</div></div></div>' +
+    '<div class="card">' + Dash.how([
+      L('Chỉ tính dự án có <code>Contract_day</code> trong kỳ đang chọn; đã thu, còn nợ, quá hạn là của chính các dự án đó tính tới hôm nay.', 'Only projects with <code>Contract_day</code> in the selected period; collected, outstanding and overdue are for those projects as of today.'),
+      L('Tên khách hàng và ngành lấy từ <code>LSB_Lead</code> qua <code>LSB_Customer.Lead_id</code>; quốc gia lấy <code>LSB_Customer.Nation</code>.', 'Customer name and segment come from <code>LSB_Lead</code> via <code>LSB_Customer.Lead_id</code>; country from <code>LSB_Customer.Nation</code>.')]) + '</div>';
+};
+
+/* ------------------------------ Trang ------------------------------ */
+App.pages.dashboard = {
+  title: 'Dashboard',
+  render: function (view, p) {
+    var now = new Date().getFullYear();
+    var year = p.year === 'all' ? 'all' : (Number(p.year) || now);
+    return Promise.all([
+      App.api('dashboard.get', { year: year === 'all' ? now : year }),
+      App.api('notification.list', { mine: !!p.mine })
+    ]).then(function (res) {
+      Dash.data = res[0]; Dash.alerts = res[1]; Dash.b = res[0].board; Dash.year = year; Dash.params = p;
+      if (p.focus === 'alerts') Dash.st.tab = 'ov';
+      App.pages.dashboard.draw(view);
+      if (p.focus === 'alerts') { var al = view.querySelector('#alerts'); if (al) al.scrollIntoView({ behavior: 'smooth' }); }
+    });
+  },
+
+  draw: function (view) {
+    var d = Dash.data, b = Dash.b, st = Dash.st, p = Dash.params;
+    var a = Dash.agg();
+    var nations = {}; b.customers.forEach(function (c) { if (c.nation) nations[c.nation] = true; });
+    function opts(list, cur) {
+      return '<option value="all">' + L('Tất cả', 'All') + '</option>' + list.map(function (o) {
+        return '<option value="' + Fmt.esc(o[0]) + '"' + (String(cur) === String(o[0]) ? ' selected' : '') + '>' + Fmt.esc(o[1]) + '</option>';
+      }).join('');
+    }
+    var tabs = [['ov', L('Tổng quan', 'Overview'), L('BGĐ', 'Management')], ['ar', L('Công nợ & thu tiền', 'Receivables'), L('Kế toán', 'Accounting')],
+      ['pr', L('Sản xuất & giao hàng', 'Production & shipping'), 'PM'], ['cu', L('Khách hàng & thị trường', 'Customers & markets'), 'Sales']];
+    var body = st.tab === 'ar' ? Dash.vAR(a) : st.tab === 'pr' ? Dash.vProd(a) : st.tab === 'cu' ? Dash.vCus(a) : Dash.vOverview(a, d, Dash.alerts, p);
+
+    view.innerHTML =
+      '<div id="dash"><div class="page-head"><div class="title"><h2>Dashboard · ' + Fmt.esc(Dash.periodName()) + '</h2><div class="muted small">' +
+      L('Hôm nay ', 'Today ') + Fmt.date(b.today) + L(' · số liệu tính từ dữ liệu gốc', ' · figures computed from source data') + '</div></div>' +
+      '<div class="dash-filters">' +
+      '<label>' + L('Năm', 'Year') + '<select id="yr">' + '<option value="all"' + (Dash.year === 'all' ? ' selected' : '') + '>' + L('Tất cả', 'All') + '</option>' +
+        d.years.map(function (y) { return '<option' + (y === Dash.year ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></label>' +
+      '<label>' + L('Quý', 'Quarter') + '<select id="fq"' + (Dash.year === 'all' ? ' disabled' : '') + '>' + '<option value="all">' + L('Cả năm', 'Full year') + '</option>' +
+        [1, 2, 3, 4].map(function (q) { return '<option value="' + q + '"' + (String(st.q) === String(q) ? ' selected' : '') + '>Q' + q + '</option>'; }).join('') + '</select></label>' +
+      '<label>' + L('Khách hàng', 'Customer') + '<select id="fcus">' + opts(b.customers.map(function (c) { return [c.id, c.name]; }), st.cus) + '</select></label>' +
+      '<label>' + L('Trạng thái DA', 'Project status') + '<select id="fst">' + opts((App.boot.config.lists.Project_status || []).map(function (s) { return [s, s]; }), st.status) + '</select></label>' +
+      '<label>' + L('Quốc gia', 'Country') + '<select id="fnat">' + opts(Object.keys(nations).sort().map(function (n) { return [n, n]; }), st.nat) + '</select></label>' +
+      '<div class="seg" id="fcur"><button data-cur="USD" class="' + (st.cur === 'USD' ? 'on' : '') + '">USD</button><button data-cur="VND" class="' + (st.cur === 'VND' ? 'on' : '') + '">VND</button></div>' +
+      '</div></div>' +
+      '<div class="tabs dash-tabs">' + tabs.map(function (t) {
+        return '<button class="tab' + (st.tab === t[0] ? ' active' : '') + '" data-dt="' + t[0] + '">' + t[1] + ' <span class="small muted">' + t[2] + '</span></button>';
+      }).join('') + '</div>' + body + '</div>';
+
+    var redraw = function () { App.pages.dashboard.draw(view); };
+    view.querySelector('#yr').onchange = function () {
+      st.q = 'all';
+      App.go('dashboard', { year: this.value === 'all' ? 'all' : +this.value, mine: p.mine }, { replace: true });
+    };
+    view.querySelector('#fq').onchange = function () { st.q = this.value; redraw(); };
+    view.querySelector('#fcus').onchange = function () { st.cus = this.value; redraw(); };
+    view.querySelector('#fst').onchange = function () { st.status = this.value; redraw(); };
+    view.querySelector('#fnat').onchange = function () { st.nat = this.value; redraw(); };
+    var mine = view.querySelector('#mine');
+    if (mine) mine.onchange = function () { App.go('dashboard', { year: Dash.year, mine: this.checked }, { replace: true }); };
+    view.querySelector('#dash').onclick = function (e) {
+      var t = e.target.closest('[data-dt]'); if (t) { st.tab = t.dataset.dt; Dash.save(); redraw(); return; }
+      var c = e.target.closest('[data-cur]'); if (c) { st.cur = c.dataset.cur; Dash.save(); redraw(); return; }
+      var w = e.target.closest('[data-win]'); if (w) { st.win = +w.dataset.win; Dash.save(); redraw(); return; }
+      var tr = e.target.closest('[data-tree]');
+      if (tr) { st.open = {}; if (tr.dataset.tree === 'open') a.ps.forEach(function (x) { st.open[x.id] = true; }); redraw(); return; }
+      var tg = e.target.closest('[data-tog]'); if (tg) { st.open[tg.dataset.tog] = !st.open[tg.dataset.tog]; redraw(); return; }
+      if (e.target.closest('a,button,input,select,summary')) return;
+      var g = e.target.closest('[data-go]'); if (g) { App.go('project', { id: g.dataset.go, tab: g.dataset.tab }); return; }
+      var cu = e.target.closest('[data-cus]');
+      if (cu) {
+        var c0 = b.customers.filter(function (x) { return x.id === cu.dataset.cus; })[0];
+        App.go(c0 && c0.lead ? 'lead' : 'customers', c0 && c0.lead ? { id: c0.lead } : {});
+      }
+    };
+    UI.bindLinks(view);
+  }
+};
+</script>

@@ -1,0 +1,1329 @@
+{
+ "source": "LSB_CRM_Bidding_Project_DB_v4.3_Project.xlsx",
+ "tables": {
+  "LSB_Lead": [
+   {
+    "name": "Lead_id",
+    "type": "string",
+    "fill": "A7650F",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Company_name",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Nation",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "Nation",
+    "formula": false
+   },
+   {
+    "name": "Industry_segment",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "Industry_segment",
+    "formula": false
+   },
+   {
+    "name": "Lead_source",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "Lead_source",
+    "formula": false
+   },
+   {
+    "name": "Contact_name",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Contact_title",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Contact_email",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Owner_id",
+    "type": "string",
+    "fill": "1D5C96",
+    "fk": "LSB_Staff",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Created_day",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Lead_status",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "Lead_status",
+    "formula": false
+   },
+   {
+    "name": "Lead_website",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Year",
+    "type": "number",
+    "fill": "7A8894",
+    "fk": "",
+    "list": "",
+    "formula": true
+   },
+   {
+    "name": "Quarter",
+    "type": "string",
+    "fill": "7A8894",
+    "fk": "",
+    "list": "",
+    "formula": true
+   }
+  ],
+  "LSB_Customer": [
+   {
+    "name": "Customer_id",
+    "type": "string",
+    "fill": "A7650F",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Lead_id",
+    "type": "string",
+    "fill": "1D5C96",
+    "fk": "LSB_Lead",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Company_name",
+    "type": "string",
+    "fill": "7A8894",
+    "fk": "",
+    "list": "",
+    "formula": true
+   },
+   {
+    "name": "Nation",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "Nation",
+    "formula": false
+   },
+   {
+    "name": "Tax_code",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Address",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Contact",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "First_contract_day",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Account_owner_id",
+    "type": "string",
+    "fill": "1D5C96",
+    "fk": "LSB_Staff",
+    "list": "",
+    "formula": false
+   }
+  ],
+  "LSB_project": [
+   {
+    "name": "Project_id",
+    "type": "string",
+    "fill": "A7650F",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Customer_id",
+    "type": "string",
+    "fill": "1D5C96",
+    "fk": "LSB_Customer",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Project_code",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Quotation_LSB-Code",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Project_name",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Project_address",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Project_owner",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Project_Maincons",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Project_Consultant",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Contract_no",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Contract_USD",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Contract_VND",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": true
+   },
+   {
+    "name": "Incoterm",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "Incoterm",
+    "formula": false
+   },
+   {
+    "name": "Tonnage_EST",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Tonnage_Actual",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Grossmargin_EST",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Grossmargin_Actual",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Contract_day",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Kickoff_day",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "RAD_date",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "RAD_Revision",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Installation_date_start",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Project_handover",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "URL_Project_data",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "PM_id",
+    "type": "string",
+    "fill": "1D5C96",
+    "fk": "LSB_Staff",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Status",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "Project_status",
+    "formula": false
+   },
+   {
+    "name": "Year",
+    "type": "number",
+    "fill": "7A8894",
+    "fk": "",
+    "list": "",
+    "formula": true
+   },
+   {
+    "name": "Quarter",
+    "type": "string",
+    "fill": "7A8894",
+    "fk": "",
+    "list": "",
+    "formula": true
+   }
+  ],
+  "LSB_Project_task": [
+   {
+    "name": "Project_task_id",
+    "type": "string",
+    "fill": "A7650F",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Project_id",
+    "type": "string",
+    "fill": "1D5C96",
+    "fk": "LSB_project",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Task_id",
+    "type": "string",
+    "fill": "1D5C96",
+    "fk": "LSB_Task",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Phase",
+    "type": "string",
+    "fill": "7A8894",
+    "fk": "",
+    "list": "",
+    "formula": true
+   },
+   {
+    "name": "Task_duty",
+    "type": "string",
+    "fill": "7A8894",
+    "fk": "",
+    "list": "",
+    "formula": true
+   },
+   {
+    "name": "Owner_id",
+    "type": "string",
+    "fill": "1D5C96",
+    "fk": "LSB_Staff",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Start_day",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Due_day",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Done_day",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Status",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "Work_status",
+    "formula": false
+   }
+  ],
+  "LSB_shipment": [
+   {
+    "name": "Shipping_id",
+    "type": "string",
+    "fill": "A7650F",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Project_id",
+    "type": "string",
+    "fill": "1D5C96",
+    "fk": "LSB_project",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Shipment_no",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Shipment_code",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Quantity_ton",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Container_qty_plan",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Container_qty_actual",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Start_Fab",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Completed_Fab",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "ETD_plan",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "ETD_actual",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "ETA_plan",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": true
+   },
+   {
+    "name": "ETA_actual",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": true
+   },
+   {
+    "name": "Vessel_no",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "BL_no",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Delay_days",
+    "type": "number",
+    "fill": "7A8894",
+    "fk": "",
+    "list": "",
+    "formula": true
+   }
+  ],
+  "LSB_Project_handover_lesson": [
+   {
+    "name": "Lesson_id",
+    "type": "string",
+    "fill": "A7650F",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Project_id",
+    "type": "string",
+    "fill": "1D5C96",
+    "fk": "LSB_project",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Shipping_id",
+    "type": "string",
+    "fill": "1D5C96",
+    "fk": "LSB_shipment",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Handover_day",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Phase",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "Lesson_phase",
+    "formula": false
+   },
+   {
+    "name": "Category",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "Lesson_category",
+    "formula": false
+   },
+   {
+    "name": "Issue_description",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Root_cause",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Impact_USD",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Impact_days",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "What_went_well",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "To_improve",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Action_next_project",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Customer_feedback",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Recorded_by",
+    "type": "string",
+    "fill": "1D5C96",
+    "fk": "LSB_Staff",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Year",
+    "type": "number",
+    "fill": "7A8894",
+    "fk": "",
+    "list": "",
+    "formula": true
+   },
+   {
+    "name": "Quarter",
+    "type": "string",
+    "fill": "7A8894",
+    "fk": "",
+    "list": "",
+    "formula": true
+   }
+  ],
+  "LSB_payment_plan": [
+   {
+    "name": "PaymentPlan_id",
+    "type": "string",
+    "fill": "A7650F",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Project_id",
+    "type": "string",
+    "fill": "1D5C96",
+    "fk": "LSB_project",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Shipping_id",
+    "type": "string",
+    "fill": "1D5C96",
+    "fk": "LSB_shipment",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Payment_code",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "Payment_code",
+    "formula": false
+   },
+   {
+    "name": "Payment_pct",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Payment_USD",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Payment_VND",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Required_docs",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Due_day",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "PP_revision",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Collected_USD",
+    "type": "number",
+    "fill": "7A8894",
+    "fk": "",
+    "list": "",
+    "formula": true
+   },
+   {
+    "name": "Balance_USD",
+    "type": "number",
+    "fill": "7A8894",
+    "fk": "",
+    "list": "",
+    "formula": true
+   },
+   {
+    "name": "Pay_status",
+    "type": "string",
+    "fill": "7A8894",
+    "fk": "",
+    "list": "",
+    "formula": true
+   }
+  ],
+  "LSB_paid": [
+   {
+    "name": "Paid_id",
+    "type": "string",
+    "fill": "A7650F",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "PaymentPlan_id",
+    "type": "string",
+    "fill": "1D5C96",
+    "fk": "LSB_payment_plan",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Invoice_no",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Invoice_day",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Paid_USD",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Paid_VND",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Payment_day",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Year",
+    "type": "number",
+    "fill": "7A8894",
+    "fk": "",
+    "list": "",
+    "formula": true
+   },
+   {
+    "name": "Quarter",
+    "type": "string",
+    "fill": "7A8894",
+    "fk": "",
+    "list": "",
+    "formula": true
+   }
+  ],
+  "LSB_cost": [
+   {
+    "name": "Cost_id",
+    "type": "string",
+    "fill": "A7650F",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Project_id",
+    "type": "string",
+    "fill": "1D5C96",
+    "fk": "LSB_project",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Category",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "Cost_category",
+    "formula": false
+   },
+   {
+    "name": "Vendor",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Cost_USD",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Cost_VND",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Invoice_code",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Payment_day",
+    "type": "date",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Cost_status",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "Cost_status",
+    "formula": false
+   },
+   {
+    "name": "Year",
+    "type": "number",
+    "fill": "7A8894",
+    "fk": "",
+    "list": "",
+    "formula": true
+   },
+   {
+    "name": "Quarter",
+    "type": "string",
+    "fill": "7A8894",
+    "fk": "",
+    "list": "",
+    "formula": true
+   }
+  ],
+  "LSB_Staff": [
+   {
+    "name": "Staff_id",
+    "type": "string",
+    "fill": "A7650F",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Full_name",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Role",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "Role",
+    "formula": false
+   },
+   {
+    "name": "Email",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Phone",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Access_level",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "Access_level",
+    "formula": false
+   },
+   {
+    "name": "Active",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "YesNo",
+    "formula": false
+   }
+  ],
+  "LSB_Task": [
+   {
+    "name": "Task_id",
+    "type": "string",
+    "fill": "A7650F",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Phase",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "Task_phase",
+    "formula": false
+   },
+   {
+    "name": "Task_duty",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Default_role",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "Role",
+    "formula": false
+   },
+   {
+    "name": "Std_duration_days",
+    "type": "number",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Task_SOP",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "",
+    "formula": false
+   },
+   {
+    "name": "Active",
+    "type": "string",
+    "fill": "1F2F3D",
+    "fk": "",
+    "list": "YesNo",
+    "formula": false
+   }
+  ]
+ },
+ "lists": {
+  "Role": [
+   "Sales",
+   "Sales Assistant",
+   "Estimator",
+   "PM",
+   "QA-QC",
+   "Logistics",
+   "Accounting",
+   "Manager"
+  ],
+  "Access_level": [
+   "Admin",
+   "Editor",
+   "Viewer"
+  ],
+  "YesNo": [
+   "Y",
+   "N"
+  ],
+  "Task_phase": [
+   "Lead Qualification",
+   "Bidding",
+   "Contracting",
+   "Execution",
+   "Payment"
+  ],
+  "Nation": [
+   "Vietnam",
+   "Australia",
+   "USA",
+   "Canada",
+   "Japan",
+   "Korea",
+   "Philippines",
+   "Singapore",
+   "Malaysia",
+   "New Zealand",
+   "Indonesia",
+   "Other",
+   "Thailand"
+  ],
+  "Industry_segment": [
+   "Warehouse",
+   "Factory",
+   "Logistics",
+   "Retail",
+   "Cold storage",
+   "Infrastructure",
+   "Commercial",
+   "Other",
+   "EPC Main Contractor",
+   "Steel Contractor",
+   "Subsidiary Company"
+  ],
+  "Lead_source": [
+   "Referral",
+   "Website",
+   "Trade show",
+   "Agent",
+   "Repeat customer",
+   "Cold outreach",
+   "Other"
+  ],
+  "Lead_status": [
+   "New",
+   "Qualifying",
+   "Qualified",
+   "Nurture",
+   "Disqualified",
+   "Converted"
+  ],
+  "Qual_status": [
+   "Qualified",
+   "Nurture",
+   "Disqualified"
+  ],
+  "Incoterm": [
+   "EXW",
+   "FOB",
+   "CFR",
+   "CIF",
+   "DAP",
+   "DDP",
+   "Lumpsum_Erect",
+   "Lumpsum_NotErect",
+   "Unit_price_Erect"
+  ],
+  "Quot_status": [
+   "Draft",
+   "Submitted",
+   "Negotiating",
+   "Won",
+   "Lost",
+   "Cancelled"
+  ],
+  "Price_positioning": [
+   "Premium",
+   "Market",
+   "Aggressive"
+  ],
+  "Work_status": [
+   "Not started",
+   "In progress",
+   "Done",
+   "Blocked"
+  ],
+  "Result": [
+   "Won",
+   "Lost",
+   "Cancelled",
+   "No-bid"
+  ],
+  "Win_loss_reason": [
+   "Price",
+   "Technical",
+   "Schedule",
+   "Relationship",
+   "Scope change",
+   "Client cancelled",
+   "Other"
+  ],
+  "Project_status": [
+   "Kick-off",
+   "Engineering",
+   "Fabrication",
+   "Shipping",
+   "Closed",
+   "Installation Processing",
+   "Installation Completed"
+  ],
+  "Lesson_phase": [
+   "Engineering",
+   "Procurement",
+   "Fabrication",
+   "QA-QC",
+   "Packing",
+   "Shipping",
+   "Erection",
+   "Payment"
+  ],
+  "Lesson_category": [
+   "Cost",
+   "Schedule",
+   "Quality",
+   "Safety",
+   "Customer",
+   "Document"
+  ],
+  "Lesson_action_status": [
+   "Open",
+   "In progress",
+   "Applied",
+   "Dropped"
+  ],
+  "Payment_code": [
+   "Deposit",
+   "Progress",
+   "Final",
+   "Retention"
+  ],
+  "Cost_category": [
+   "Material",
+   "Fabrication",
+   "Painting",
+   "Logistics",
+   "Other"
+  ],
+  "Cost_status": [
+   "Planned",
+   "Invoiced",
+   "Paid"
+  ]
+ }
+}

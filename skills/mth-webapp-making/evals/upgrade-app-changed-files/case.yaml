@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: upgrade-app-changed-files
+expected_outcome: |
+  The upgraded app reports version 1.1 (APP.VERSION) in the delivered zip In the upgraded app, notification.list on the sample data returns OB-2026-002 (Status At risk) as a danger-level alert whose link opens HR_Objective OB-2026-002 The changed-files list marks exactly the files that differ between v1.0 and v1.1 as new/modified and lists the rest as unchanged
+context:
+  scaffold_script: place-files.sh

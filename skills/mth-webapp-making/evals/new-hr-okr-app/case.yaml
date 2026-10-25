@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: new-hr-okr-app
+expected_outcome: |
+  The delivered app zip contains a configuration covering all 6 HR_ tables, with KeyResult_id as primary key of HR_KeyResult and Objective_id as a foreign key to HR_Objective The menu is organised in the 3 requested groups (Nhân sự / OKR / Danh mục) and HR_Staff and HR_Department are editable only by Admin Backend tests and browser (UI) tests were actually run and the recorded output shows 0 failures in the final run
+context:
+  scaffold_script: place-files.sh

@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: fix-xlsx-keep-dropdowns
+expected_outcome: |
+  A new file versioned v1.1 is produced and the original v1.0 file is left unchanged None of the 13 existing dropdowns are lost: the new file has at least 14 x14 data validations in total HR_KeyResult.Objective_id has a dropdown whose source is HR_Objective column A
+context:
+  scaffold_script: place-files.sh
