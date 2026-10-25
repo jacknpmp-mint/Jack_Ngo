@@ -1,0 +1,549 @@
+<style>
+/* Custom.html — giao diện riêng LSB Cost Input (bản mẫu đã duyệt 25/10/2026) */
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:16px;padding:5px 11px;cursor:pointer;font:inherit;font-size:13px;color:var(--text)}
+.chip.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.chip em{font-style:normal;opacity:.7;margin-left:4px;font-size:12px}
+.cost-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.cost-filters label{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.cost-filters select{width:auto;max-width:100%}
+.cbest{font-weight:700;color:var(--ok)}
+tr.csub td{background:#F7F9FB;font-size:12px}
+.cbar{display:flex;height:10px;border-radius:5px;overflow:hidden;min-width:110px;background:#EEF1F4}
+.cbar span{display:block;height:100%}
+.clegend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:6px}
+.clegend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.cgrid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:16px}
+.cgrid2>.card{min-width:0}
+.chow dt{font-weight:600;margin-top:10px}
+.chow dd{margin:2px 0 0;color:var(--muted)}
+.chow code{font-size:12px;background:#F1F4F7;padding:0 4px;border-radius:4px}
+.chart svg text{fill:var(--muted);font-size:11px}
+.cdl{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;font-size:13px}
+.cdl dt{color:var(--muted)} .cdl dd{margin:0}
+.clist{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:12px}
+.clist textarea{width:100%;min-height:150px;font:13px/1.5 inherit;font-family:inherit}
+.cdoc{white-space:nowrap}
+.c-pick{display:flex;gap:6px;align-items:center;flex:1 1 320px;min-width:0;max-width:100%}
+.c-pick select{flex:1;min-width:0;width:100%}
+</style>
+<script>
+/**
+ * Custom.html — Phần giao diện RIÊNG của LSB Cost Input (nạp sau cùng; bộ khung dùng chung không sửa).
+ *  - Bảng giá vật tư: 1 mục menu ('mat') + thanh chọn 12 nhóm phía trên danh sách chuẩn của từng sheet Mat_*.
+ *  - Dashboard: Giá tham chiếu · Lịch sử giá · Sản xuất & vận tải · Kiểm tra dữ liệu · Cảnh báo · Cách tính
+ *    (dữ liệu: d.Cost_board_ — 20_Cost.gs tính sẵn tỷ giá, giá quy đổi, hiệu lực, nhóm so sánh).
+ *  - Trang 360° riêng: Nhà cung cấp, Cảng, Công đoạn (d.extra.cost).
+ *  - Danh sách chọn (route 'lists'): xem / Admin sửa các danh sách ở sheet Config.
+ */
+var Cost = {
+  SERIES: ['#1D5C96', '#A7650F', '#2E8B57', '#7B4FA0', '#C62828', '#5F6B76'],
+  PARTS: [['cost_labor', '#1D5C96', ['Nhân công', 'Labor']], ['cost_machine', '#A7650F', ['Máy', 'Machine']],
+    ['cost_consumables', '#2E8B57', ['Vật tư tiêu hao', 'Consumables']], ['cost_overhead', '#7B4FA0', ['Chi phí chung', 'Overhead']]],
+  isLive: function (st) { return st === 'valid' || st === 'open'; },
+  fx: function (v) { return v === null || v === undefined ? '?' : Number(v).toLocaleString('en-US', { maximumFractionDigits: 4 }); },
+  money: function (v) { if (v === null || v === undefined || v === '') return '—'; return Fmt.num(v, Math.abs(v) < 100 ? 2 : 0); },
+  pill: function (r, alertDays) {
+    if (!r || !r._st) return '';
+    if (r._st === 'future') return UI.badge(L('Sắp áp dụng', 'Not yet in effect'), 'blue');
+    if (r._st === 'open') return UI.badge(L('Không thời hạn', 'Open-ended'));
+    if (r._st === 'expired') return UI.badge(L('Hết hạn', 'Expired'), 'danger');
+    if (r._days !== null && r._days <= (alertDays || 14)) return UI.badge(App.lang === 'en' ? r._days + ' days left' : 'Còn ' + r._days + ' ngày', 'warn');
+    return UI.badge(L('Còn hiệu lực', 'Valid'), 'ok');
+  },
+  base: function (r) { return r._base === null || r._base === undefined ? (r._amt === null || r._amt === undefined ? '—' : UI.badge(L('Thiếu tỷ giá', 'No FX rate'), 'warn')) : Cost.money(r._base); },
+  sup: function (names, id) {
+    if (!id) return '—';
+    var n = names.suppliers[id];
+    return n ? '<a data-go360="Suppliers" data-id="' + Fmt.esc(id) + '">' + Fmt.esc(n) + '</a>'
+      : '<span class="id">' + Fmt.esc(id) + '</span> ' + UI.badge('Code not found', 'danger');
+  },
+  port: function (names, id) {
+    if (!id) return '—';
+    var n = names.ports[id];
+    return n ? '<a data-go360="Ports" data-id="' + Fmt.esc(id) + '">' + Fmt.esc(n) + '</a> <span class="id">' + Fmt.esc(id) + '</span>'
+      : '<span class="id">' + Fmt.esc(id) + '</span> ' + UI.badge('Code not found', 'danger');
+  },
+  proc: function (names, id) {
+    if (!id) return '—';
+    var n = names.processes[id];
+    return n ? '<a data-go360="Processes" data-id="' + Fmt.esc(id) + '">' + Fmt.esc(n) + '</a>'
+      : '<span class="id">' + Fmt.esc(id) + '</span> ' + UI.badge('Code not found', 'danger');
+  },
+  doc: function (r) {
+    var out = '';
+    [['doc1_url', 'doc1_type'], ['doc2_url', 'doc2_type']].forEach(function (k) {
+      var u = r[k[0]];
+      if (!u) return;
+      var label = '📎 ' + Fmt.esc(r[k[1]] || L('Tệp', 'File'));
+      out += /^https?:\/\//i.test(u) ? ' <a class="cdoc" href="' + Fmt.esc(u) + '" target="_blank" rel="noopener">' + label + '</a>'
+        : ' <span class="cdoc" title="' + Fmt.esc(u) + '">' + label + '</span>';
+    });
+    return out;
+  },
+  specs: function (b, t) { return (b.keyCols[t] || []).filter(function (k) { return k.indexOf('spec_') === 0; }); },
+  itemLabel: function (b, t, r) {
+    return Cost.specs(b, t).map(function (k) { return r[k]; }).filter(function (v) { return v !== undefined && v !== ''; }).join(' · ');
+  },
+  /** Gắn link tới 360° (data-go360) trong el. */
+  bind360: function (el) {
+    el.querySelectorAll('[data-go360]').forEach(function (a) {
+      a.onclick = function (e) { e.preventDefault(); e.stopPropagation(); App.go('entity', { table: a.dataset.go360, id: a.dataset.id }); };
+    });
+  },
+  table: function (head, body, empty) {
+    return '<div class="table-wrap"><table class="tbl"><thead><tr>' + head + '</tr></thead><tbody>' +
+      (body || '<tr><td colspan="30" class="empty">' + Fmt.esc(empty || L('Chưa có dữ liệu', 'No data yet')) + '</td></tr>') + '</tbody></table></div>';
+  },
+  store: function (k, v) { try { if (v === undefined) return localStorage.getItem('lsbcost.' + k); localStorage.setItem('lsbcost.' + k, v); } catch (e) { return null; } return null; }
+};
+
+/* ---------------- Hiển thị ô: tình trạng hiệu lực, link tệp ---------------- */
+(function () {
+  var cell = Fmt.cell;
+  Fmt.cell = function (col, v) {
+    if (col && col.name === 'validity_status' && v) return UI.badge(v === 'Expired' ? L('Hết hạn', 'Expired') : v === 'Valid' ? L('Còn hiệu lực', 'Valid') : v, v === 'Expired' ? 'danger' : v === 'Valid' ? 'ok' : '');
+    if (col && /^doc\d_url$/.test(col.name) && v) {
+      return /^https?:\/\//i.test(v) ? '<a class="cdoc" href="' + Fmt.esc(v) + '" target="_blank" rel="noopener">📎 ' + L('Mở', 'Open') + '</a>'
+        : '<span class="cdoc" title="' + Fmt.esc(v) + '">📎 ' + Fmt.esc(String(v).slice(0, 28)) + '</span>';
+    }
+    if (col && col.type === 'number' && !col.pct && typeof v === 'number' && Math.abs(v) < 100 && v % 1) return Number(v).toLocaleString('en-US', { maximumFractionDigits: 4 });
+    return cell(col, v);
+  };
+})();
+
+/* ---------------- Bảng giá vật tư: 1 mục menu + chọn nhóm ---------------- */
+App.pages.mat = {
+  title: function () { return L('Bảng giá vật tư', 'Material prices'); },
+  render: function () {
+    var mats = Object.keys(App.boot.config.tables).filter(function (t) { return t.indexOf('Mat_') === 0; });
+    var last = Cost.store('mat');
+    App.go('entity', { table: mats.indexOf(last) >= 0 ? last : mats[0] }, { replace: true });
+    return null;
+  }
+};
+(function () {
+  var renderList = App.pages.entity.renderList;
+  App.pages.entity.renderList = function (view, p) {
+    var pr = renderList(view, p);
+    if (!p.table || p.table.indexOf('Mat_') !== 0) return pr;
+    Cost.store('mat', p.table);
+    return pr.then(function () {
+      var mats = Object.keys(App.boot.config.tables).filter(function (t) { return t.indexOf('Mat_') === 0; });
+      var bar = document.createElement('div');
+      bar.className = 'chips';
+      bar.id = 'mat-groups';
+      bar.innerHTML = mats.map(function (t) {
+        return '<button type="button" class="chip' + (t === p.table ? ' on' : '') + '" data-grp="' + t + '">' + Fmt.esc(App.tlabel(t)) + '</button>';
+      }).join('');
+      var head = view.querySelector('.page-head');
+      if (head) head.insertAdjacentElement('afterend', bar);
+      var h2 = view.querySelector('.page-head h2');
+      if (h2) h2.textContent = L('Bảng giá vật tư · ', 'Material prices · ') + App.tlabel(p.table);
+      bar.addEventListener('click', function (e) { var b = e.target.closest('[data-grp]'); if (b) App.go('entity', { table: b.dataset.grp }); });
+      document.querySelectorAll('.nav-item').forEach(function (a) { a.classList.toggle('active', a.dataset.route === 'mat'); });
+    });
+  };
+})();
+
+/* ---------------- Dashboard ---------------- */
+Cost.dash = { refG: '', refSup: '', open: {}, hist: '', };
+App.pages.dashboard.tab = 'ref';
+App.pages.dashboard.allTabs = function () {
+  var me = App.pages.dashboard, c = Cost.dash;
+  function wrap(fn) { return function (d) { return Cost.kpis(d) + fn(d); }; }
+  var nAl = me.alerts ? me.alerts.counts.danger + me.alerts.counts.warn : 0;
+  return [
+    { id: 'ref', label: [L('Giá tham chiếu', 'Reference prices')], render: wrap(c.vRef), bind: c.bindRef },
+    { id: 'hist', label: [L('Lịch sử giá', 'Price history')], render: wrap(c.vHist), bind: c.bindHist },
+    { id: 'pt', label: [L('Sản xuất & vận tải', 'Production & transport')], render: wrap(c.vPT), bind: function (el) { Cost.bind360(el); } },
+    { id: 'chk', label: [L('Kiểm tra dữ liệu', 'Data check')], render: me.vChecks },
+    { id: 'ov', label: [L('Cảnh báo', 'Alerts') + (nAl ? ' (' + nAl + ')' : '')], render: me.vOverview },
+    { id: 'how', label: [L('Cách tính', 'How it is calculated')], render: c.vHow }
+  ];
+};
+Cost.redraw = function () { App.pages.dashboard.draw(document.getElementById('view')); };
+
+/** Mặt hàng vật tư: [{ t, key, label, desc, unit, rows, latest, live, best, spread }] từ dữ liệu server. */
+Cost.matItems = function (b) {
+  var out = [];
+  b.mat.forEach(function (t) {
+    var byId = {};
+    (b.rows[t] || []).forEach(function (r) { byId[r._id] = r; });
+    (b.items[t] || []).forEach(function (it) {
+      var r0 = byId[it.ids[0]];
+      out.push({ t: t, key: it.key, label: Cost.itemLabel(b, t, r0), desc: r0.description || '', unit: r0.unit || '',
+        rows: it.ids.map(function (i) { return byId[i]; }), latest: it.latest.map(function (i) { return byId[i]; }),
+        live: it.live.map(function (i) { return byId[i]; }), best: it.best ? byId[it.best] : null, spread: it.spread });
+    });
+  });
+  return out;
+};
+
+Cost.kpis = function (d) {
+  var b = d.Cost_board_, items = Cost.matItems(b), all = [];
+  b.mat.forEach(function (t) { all = all.concat(b.rows[t] || []); });
+  var live = all.filter(function (r) { return Cost.isLive(r._st); }), exp = all.filter(function (r) { return r._st === 'expired'; });
+  var sups = {}; live.forEach(function (r) { if (r.supplier_id) sups[r.supplier_id] = 1; });
+  return UI.kpis([
+    { label: L('Mặt hàng có giá hiệu lực', 'Items with a valid price'), value: items.filter(function (i) { return i.live.length; }).length + ' / ' + items.length, tone: 'ok', sub: L('theo nhóm + 5 Spec + ĐVT', 'by group + 5 specs + unit') },
+    { label: L('Báo giá vật tư còn hiệu lực', 'Valid material quotes'), value: live.length, sub: L('trên ', 'of ') + all.length + L(' dòng', ' rows') },
+    { label: L('Báo giá vật tư hết hạn', 'Expired material quotes'), value: exp.length, tone: exp.length ? 'warn' : '', sub: L('giữ làm lịch sử giá', 'kept as price history') },
+    { label: L('NCC đang có giá', 'Suppliers with a valid price'), value: Object.keys(sups).length, sub: L('vật tư · tiền gốc ', 'materials · base currency ') + b.base }
+  ]);
+};
+
+Cost.dash.vRef = function (d) {
+  var b = d.Cost_board_, c = Cost.dash, items = Cost.matItems(b);
+  var supIds = {};
+  items.forEach(function (i) { i.latest.forEach(function (r) { if (r.supplier_id) supIds[r.supplier_id] = 1; }); });
+  var list = items.filter(function (i) {
+    return (!c.refG || i.t === c.refG) && (!c.refSup || i.latest.some(function (r) { return r.supplier_id === c.refSup; }));
+  });
+  var f = '<div class="cost-filters"><label>' + L('Nhóm', 'Group') + ' <select id="c-g"><option value="">' + L('Tất cả nhóm', 'All groups') + '</option>' +
+    b.mat.map(function (t) { return '<option value="' + t + '"' + (c.refG === t ? ' selected' : '') + '>' + Fmt.esc(App.tlabel(t)) + '</option>'; }).join('') + '</select></label>' +
+    '<label>' + L('NCC', 'Supplier') + ' <select id="c-s"><option value="">' + L('Tất cả', 'All') + '</option>' + Object.keys(supIds).map(function (s) {
+      return '<option value="' + Fmt.esc(s) + '"' + (c.refSup === s ? ' selected' : '') + '>' + Fmt.esc(b.names.suppliers[s] || s) + '</option>'; }).join('') + '</select></label>' +
+    '<span class="small muted">' + L('Tiền gốc: ', 'Base currency: ') + '<b>' + Fmt.esc(b.base) + '</b> (Config!B3). ' + L('Bấm một dòng để xem từng NCC.', 'Click a row to see each supplier.') + '</span></div>';
+  var body = list.map(function (it) {
+    var o = c.open[it.key], best = it.best;
+    var h = '<tr class="click" data-ref="' + Fmt.esc(it.key) + '"><td>' + (o ? '▾ ' : '▸ ') + Fmt.esc(App.tlabel(it.t)) + '</td><td><b>' + Fmt.esc(it.label || it.desc) +
+      '</b><div class="small muted">' + Fmt.esc(it.desc) + '</div></td><td>' + Fmt.esc(it.unit) + '</td><td class="num">' +
+      (best ? '<span class="cbest">' + Cost.money(best._base) + '</span>' : UI.badge(L('Không còn giá hiệu lực', 'No valid price'), 'danger')) + '</td><td>' +
+      (best ? Cost.sup(b.names, best.supplier_id) : '—') + '</td><td class="num">' + it.live.length + ' / ' + it.latest.length + '</td><td class="num">' +
+      (it.spread === null ? '—' : Fmt.num(it.spread * 100, 1) + '%') + '</td><td>' + (best ? Cost.pill(best, b.alertDays) : '—') + '</td></tr>';
+    if (o) h += it.latest.map(function (r) {
+      return '<tr class="csub"><td></td><td><span class="id">' + Fmt.esc(r._id) + '</span> · ' + L('báo giá ', 'quoted ') + Fmt.date(r.effective_date) + Cost.doc(r) + '</td><td>' + Fmt.esc(r.currency || '') +
+        '</td><td class="num">' + Cost.money(r._amt) + ' ' + Fmt.esc(r.currency || '') + ' × ' + Cost.fx(r._fx) + ' = <b>' + Cost.base(r) + '</b></td><td>' +
+        Cost.sup(b.names, r.supplier_id) + '</td><td></td><td></td><td>' + Cost.pill(r, b.alertDays) + '</td></tr>';
+    }).join('');
+    return h;
+  }).join('');
+  return '<div class="card" id="c-ref"><h3>' + L('Giá tham chiếu theo mặt hàng', 'Reference price by item') + '</h3>' + f +
+    Cost.table('<th>' + L('Nhóm', 'Group') + '</th><th>' + L('Mặt hàng (Spec)', 'Item (specs)') + '</th><th>' + L('ĐVT', 'Unit') + '</th><th class="num">' +
+      L('Giá tham chiếu (', 'Reference price (') + Fmt.esc(b.base) + ')</th><th>' + L('NCC rẻ nhất', 'Cheapest supplier') + '</th><th class="num">' +
+      L('NCC còn hiệu lực', 'Suppliers valid') + '</th><th class="num">' + L('Chênh cao–thấp', 'High–low spread') + '</th><th>' + L('Hiệu lực', 'Validity') + '</th>', body,
+      L('Chưa có báo giá vật tư', 'No material quotes yet')) + '</div>';
+};
+Cost.dash.bindRef = function (el) {
+  var c = Cost.dash;
+  var g = el.querySelector('#c-g'), s = el.querySelector('#c-s');
+  if (g) g.onchange = function () { c.refG = this.value; Cost.redraw(); };
+  if (s) s.onchange = function () { c.refSup = this.value; Cost.redraw(); };
+  el.querySelectorAll('[data-ref]').forEach(function (tr) {
+    tr.addEventListener('click', function (e) { if (e.target.closest('a')) return; c.open[tr.dataset.ref] = !c.open[tr.dataset.ref]; Cost.redraw(); });
+  });
+  Cost.bind360(el);
+};
+
+Cost.dash.vHist = function (d) {
+  var b = d.Cost_board_, c = Cost.dash, items = Cost.matItems(b);
+  if (!items.length) return '<div class="card"><div class="empty">' + L('Chưa có báo giá vật tư', 'No material quotes yet') + '</div></div>';
+  var it = items.filter(function (i) { return i.key === c.hist; })[0] || items.filter(function (i) { return i.rows.length > 1; })[0] || items[0];
+  c.hist = it.key;
+  var sel = '<label class="small muted c-pick">' + L('Mặt hàng ', 'Item ') + '<select id="c-h">' + items.map(function (i) {
+    return '<option value="' + Fmt.esc(i.key) + '"' + (i.key === it.key ? ' selected' : '') + '>' + Fmt.esc(App.tlabel(i.t) + ' — ' + (i.label || i.desc) + ' (' + i.unit + ') · ' + i.rows.length) + '</option>';
+  }).join('') + '</select></label>';
+  var pts = it.rows.filter(function (r) { return r._base !== null && r.effective_date; }).sort(function (a, z) { return a.effective_date < z.effective_date ? -1 : 1; });
+  var sups = []; pts.forEach(function (r) { var s = r.supplier_id || ''; if (sups.indexOf(s) < 0) sups.push(s); });
+  var chart = '<div class="empty">' + L('Chưa có báo giá có giá quy đổi', 'No quote with a base-currency price yet') + '</div>';
+  if (pts.length) {
+    var W = 760, H = 260, Lm = 72, R = 16, T = 14, B = 34;
+    var ts = pts.map(function (r) { return Date.parse(r.effective_date); });
+    var x0 = Math.min.apply(null, ts), x1 = Math.max.apply(null, ts);
+    if (x0 === x1) { x0 -= 864e5 * 30; x1 += 864e5 * 30; }
+    var vs = pts.map(function (r) { return r._base; });
+    var y0 = Math.min.apply(null, vs), y1 = Math.max.apply(null, vs), pad = (y1 - y0) * 0.15 || y1 * 0.05 || 1;
+    y0 = Math.max(0, y0 - pad); y1 += pad;
+    var X = function (t) { return Lm + (t - x0) / (x1 - x0) * (W - Lm - R); }, Y = function (v) { return T + (1 - (v - y0) / (y1 - y0)) * (H - T - B); };
+    var g = [0, 1, 2, 3, 4].map(function (i) {
+      var v = y0 + (y1 - y0) * i / 4;
+      return '<line x1="' + Lm + '" x2="' + (W - R) + '" y1="' + Y(v) + '" y2="' + Y(v) + '" stroke="#E1E6EB"/><text x="' + (Lm - 8) + '" y="' + (Y(v) + 4) + '" text-anchor="end">' + Cost.money(v) + '</text>';
+    }).join('');
+    var dates = []; pts.forEach(function (r) { if (dates.indexOf(r.effective_date) < 0) dates.push(r.effective_date); });
+    g += dates.map(function (dt) { return '<text x="' + X(Date.parse(dt)) + '" y="' + (H - 12) + '" text-anchor="middle">' + Fmt.date(dt).slice(0, 5) + '</text>'; }).join('');
+    g += sups.map(function (s, i) {
+      var p = pts.filter(function (r) { return (r.supplier_id || '') === s; }), col = Cost.SERIES[i % Cost.SERIES.length];
+      return '<polyline fill="none" stroke="' + col + '" stroke-width="2" points="' + p.map(function (r) { return X(Date.parse(r.effective_date)) + ',' + Y(r._base); }).join(' ') + '"/>' +
+        p.map(function (r, j) {
+          return '<circle cx="' + X(Date.parse(r.effective_date)) + '" cy="' + Y(r._base) + '" r="' + (j === p.length - 1 ? 5 : 3.5) + '" fill="' + (Cost.isLive(r._st) ? col : '#fff') +
+            '" stroke="' + col + '" stroke-width="2"><title>' + Fmt.esc((b.names.suppliers[s] || s) + ' · ' + Fmt.date(r.effective_date) + ' · ' + Cost.money(r._base) + ' ' + b.base) + '</title></circle>';
+        }).join('');
+    }).join('');
+    chart = '<div class="chart" style="overflow-x:auto"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="min-width:520px;max-width:' + W + 'px" role="img">' + g + '</svg></div>' +
+      '<div class="clegend">' + sups.map(function (s, i) { return '<span><i style="background:' + Cost.SERIES[i % Cost.SERIES.length] + '"></i>' + Fmt.esc(b.names.suppliers[s] || s || '—') + '</span>'; }).join('') +
+      '<span>' + L('● đặc = còn hiệu lực · ○ rỗng = hết hạn', '● filled = valid · ○ hollow = expired') + '</span></div>';
+  }
+  var rows = pts.slice().reverse().map(function (r) {
+    return '<tr><td>' + Fmt.date(r.effective_date) + '</td><td>' + Cost.sup(b.names, r.supplier_id) + '</td><td class="num">' + Cost.money(r._amt) + ' ' + Fmt.esc(r.currency || '') +
+      '</td><td class="num">' + Cost.fx(r._fx) + '</td><td class="num">' + Cost.money(r._base) + '</td><td>' + Cost.pill(r, b.alertDays) + '</td><td><span class="id">' + Fmt.esc(r._id) + '</span>' + Cost.doc(r) + '</td></tr>';
+  }).join('');
+  return '<div class="card"><div class="card-head"><h3>' + L('Lịch sử giá (', 'Price history (') + Fmt.esc(b.base) + ' / ' + Fmt.esc(it.unit) + ')</h3>' + sel + '</div>' + chart + '</div>' +
+    '<div class="card"><h3>' + L('Các báo giá của mặt hàng', 'Quotes for this item') + '</h3>' + Cost.table('<th>' + L('Ngày báo giá', 'Quote date') + '</th><th>' + L('NCC', 'Supplier') +
+      '</th><th class="num">' + L('Giá nguyên tệ', 'Original price') + '</th><th class="num">' + L('Tỷ giá', 'FX rate') + '</th><th class="num">' + L('Giá ', 'Price ') + Fmt.esc(b.base) + '</th><th>' +
+      L('Hiệu lực', 'Validity') + '</th><th>' + L('Mã', 'ID') + '</th>', rows) + '</div>';
+};
+Cost.dash.bindHist = function (el) {
+  var h = el.querySelector('#c-h');
+  if (h) h.onchange = function () { Cost.dash.hist = this.value; Cost.redraw(); };
+  Cost.bind360(el);
+};
+
+/** Dòng tốt nhất còn hiệu lực trong danh sách. */
+Cost.bestLive = function (rs) {
+  return rs.filter(function (r) { return Cost.isLive(r._st) && r._base !== null; }).sort(function (a, z) { return a._base - z._base; })[0] || null;
+};
+Cost.dash.vPT = function (d) {
+  var b = d.Cost_board_, n = b.names;
+  var pr = b.rows.Prod_Process_Rates || [], sc = b.rows.Prod_Subcontract || [];
+  var k = function (r) { return [r.process_id || '', r.product_type || '', r.unit || ''].join('|'); };
+  var keys = []; pr.concat(sc).forEach(function (r) { if (keys.indexOf(k(r)) < 0) keys.push(k(r)); });
+  var prod = keys.map(function (key) {
+    var p = key.split('|'), ih = Cost.bestLive(pr.filter(function (r) { return k(r) === key; })), sb = Cost.bestLive(sc.filter(function (r) { return k(r) === key; }));
+    var bar = ih && ih._amt ? '<div class="cbar">' + Cost.PARTS.map(function (x) { return '<span style="width:' + ((+ih[x[0]] || 0) / ih._amt * 100) + '%;background:' + x[1] + '" title="' + Fmt.esc(L(x[2][0], x[2][1])) + '"></span>'; }).join('') + '</div>' : '';
+    var diff = ih && sb && ih._base ? sb._base / ih._base - 1 : null;
+    return '<tr><td>' + Cost.proc(n, p[0]) + '</td><td>' + Fmt.esc(p[1]) + '</td><td>' + Fmt.esc(p[2]) + '</td><td class="num">' + (ih ? Cost.money(ih._base) : '—') +
+      (ih && ih.factory ? '<div class="small muted">' + Fmt.esc(ih.factory) + '</div>' : '') + '</td><td>' + bar + '</td><td class="num">' + (sb ? Cost.money(sb._base) : '—') +
+      '</td><td>' + (sb ? Cost.sup(n, sb.supplier_id) : '—') + '</td><td>' + (diff === null ? '—' : UI.badge((diff > 0 ? L('Tự làm rẻ hơn ', 'In-house cheaper by ') : L('Thuê ngoài rẻ hơn ', 'Subcontract cheaper by ')) +
+        Fmt.num(Math.abs(diff) * 100, 0) + '%', diff > 0 ? 'ok' : 'warn')) + '</td></tr>';
+  }).join('');
+  var cap = (b.rows.Prod_Capacity || []).map(function (r) {
+    return '<tr><td>' + Fmt.esc(r.factory || '') + '</td><td>' + Cost.proc(n, r.process_id) + '</td><td>' + Fmt.esc(r.product_type || '') + '</td><td class="num">' + Fmt.num(r.capacity_qty, 2) + ' ' +
+      Fmt.esc(r.unit || '') + (r.capacity_period ? ' / ' + Fmt.esc(r.capacity_period) : '') + '</td><td class="num">' + Fmt.num(r.manhours_per_unit, 2) + '</td><td class="num">' + Fmt.num(r.machinehours_per_unit, 2) +
+      '</td><td class="num">' + Fmt.num(r.lead_time_days, 0) + '</td></tr>';
+  }).join('');
+  var sea = b.rows.Trans_Sea || [], byId = {};
+  sea.forEach(function (r) { byId[r._id] = r; });
+  var lanes = (b.items.Trans_Sea || []).map(function (it) {
+    var r0 = byId[it.ids[0]], best = it.best ? byId[it.best] : null;
+    return '<tr><td>' + Cost.port(n, r0.pol) + '</td><td>' + Cost.port(n, r0.pod) + '</td><td>' + Fmt.esc(r0.cargo_type || '') + '</td><td>' + Fmt.esc(r0.rate_basis || '') + '</td><td class="num">' +
+      (best ? '<span class="cbest">' + Cost.money(best._base) + '</span>' : UI.badge(L('Không còn giá hiệu lực', 'No valid price'), 'danger')) + '</td><td class="num">' +
+      (best ? Cost.money(best._amt) + ' ' + Fmt.esc(best.currency || '') : '—') + '</td><td>' + (best ? Cost.sup(n, best.supplier_id) : '—') + '</td><td class="num">' +
+      (best && best.transit_days !== undefined ? Fmt.num(best.transit_days, 0) : '—') + '</td><td class="num">' + it.live.length + ' / ' + it.latest.length + '</td></tr>';
+  }).join('');
+  var lc = (b.rows.Trans_Local_Charges || []).filter(function (r) { return Cost.isLive(r._st); }).map(function (r) {
+    return '<tr><td>' + Fmt.esc(r.side === 'Origin' ? L('Đầu đi', 'Origin') : r.side === 'Destination' ? L('Đầu đến', 'Destination') : (r.side || '')) + '</td><td>' + Cost.port(n, r.port) + '</td><td>' +
+      Fmt.esc(r.charge_type || '') + '</td><td>' + Fmt.esc(r.cargo_type || '—') + '</td><td>' + Fmt.esc(r.rate_basis || '') + '</td><td class="num">' +
+      (r.percent_rate !== undefined && r.percent_rate !== '' ? Fmt.num(r.percent_rate, 3) + '%' : Cost.base(r)) + '</td><td>' + Cost.sup(n, r.supplier_id) + '</td></tr>';
+  }).join('');
+  var inl = (b.rows.Trans_Inland_Origin || []).map(function (r) {
+    return [L('Đầu đi', 'Origin'), Fmt.esc(r.from_place || ''), r.destination_type === 'Port' ? Cost.port(n, r.to_port) : Fmt.esc(r.to_site || ''), r];
+  }).concat((b.rows.Trans_Inland_Dest || []).map(function (r) {
+    return [L('Đầu đến', 'Destination'), Cost.port(n, r.from_port), Fmt.esc((r.to_site || '') + (r.country ? ' (' + r.country + ')' : '')), r];
+  })).map(function (x) {
+    var r = x[3];
+    return '<tr><td>' + x[0] + '</td><td>' + x[1] + '</td><td>' + x[2] + '</td><td>' + Fmt.esc(r.vehicle_type || '') + '</td><td>' + Fmt.esc(r.rate_basis || '') + '</td><td class="num">' + Cost.base(r) +
+      '</td><td>' + Cost.sup(n, r.supplier_id) + '</td><td>' + Cost.pill(r, b.alertDays) + '</td></tr>';
+  }).join('');
+  var B = Fmt.esc(b.base);
+  return '<div class="card"><h3>' + L('Công đoạn: tự làm hay thuê ngoài', 'Process: in-house or subcontract') + '</h3><div class="small muted" style="margin-bottom:10px">' +
+    L('So cùng công đoạn + loại sản phẩm + ĐVT; giá ', 'Same process + product type + unit; prices in ') + B + L(', chỉ dòng còn hiệu lực', ', valid rows only') + '</div>' +
+    Cost.table('<th>' + L('Công đoạn', 'Process') + '</th><th>' + L('Loại sản phẩm', 'Product type') + '</th><th>' + L('ĐVT', 'Unit') + '</th><th class="num">' + L('Tự làm', 'In-house') +
+      '</th><th>' + L('Cơ cấu', 'Breakdown') + '</th><th class="num">' + L('Thuê ngoài thấp nhất', 'Lowest subcontract') + '</th><th>' + L('Nhà thầu phụ', 'Subcontractor') + '</th><th>' +
+      L('So sánh', 'Comparison') + '</th>', prod) +
+    '<div class="clegend">' + Cost.PARTS.map(function (x) { return '<span><i style="background:' + x[1] + '"></i>' + Fmt.esc(L(x[2][0], x[2][1])) + '</span>'; }).join('') + '</div></div>' +
+    '<div class="card"><h3>' + L('Năng lực sản xuất', 'Production capacity') + '</h3>' + Cost.table('<th>' + L('Nhà máy', 'Factory') + '</th><th>' + L('Công đoạn', 'Process') + '</th><th>' +
+      L('Loại SP', 'Product type') + '</th><th class="num">' + L('Năng lực', 'Capacity') + '</th><th class="num">' + L('Giờ công / ĐV', 'Man-hours / unit') + '</th><th class="num">' +
+      L('Giờ máy / ĐV', 'Machine-hours / unit') + '</th><th class="num">' + L('Lead time (ngày)', 'Lead time (days)') + '</th>', cap) + '</div>' +
+    '<div class="card"><h3>' + L('Cước biển theo tuyến', 'Sea freight by lane') + '</h3><div class="small muted" style="margin-bottom:10px">' +
+    L('Tuyến = POL + POD + loại container + cách tính; thấp nhất còn hiệu lực = cước + phụ phí, quy đổi ', 'Lane = POL + POD + container type + rate basis; lowest valid = freight + surcharges, in ') + B + '</div>' +
+    Cost.table('<th>POL</th><th>POD</th><th>' + L('Container', 'Container') + '</th><th>' + L('Cách tính', 'Basis') + '</th><th class="num">' + L('Thấp nhất (', 'Lowest (') + B + ')</th><th class="num">' +
+      L('Nguyên tệ', 'Original') + '</th><th>' + L('Hãng / FWD', 'Carrier / FWD') + '</th><th class="num">' + L('Transit (ngày)', 'Transit (days)') + '</th><th class="num">' +
+      L('Còn hiệu lực', 'Valid') + '</th>', lanes) + '</div>' +
+    '<div class="cgrid2"><div class="card"><h3>' + L('Phí địa phương còn hiệu lực', 'Valid local charges') + '</h3>' + Cost.table('<th>' + L('Phía', 'Side') + '</th><th>' + L('Cảng', 'Port') +
+      '</th><th>' + L('Loại phí', 'Charge') + '</th><th>' + L('Container', 'Container') + '</th><th>' + L('Cách tính', 'Basis') + '</th><th class="num">' + L('Mức', 'Amount') + '</th><th>' +
+      L('NCC', 'Supplier') + '</th>', lc) + '</div><div class="card"><h3>' + L('Vận chuyển nội địa', 'Inland transport') + '</h3>' +
+    Cost.table('<th>' + L('Phía', 'Side') + '</th><th>' + L('Từ', 'From') + '</th><th>' + L('Đến', 'To') + '</th><th>' + L('Xe', 'Vehicle') + '</th><th>' + L('Cách tính', 'Basis') +
+      '</th><th class="num">' + B + '</th><th>' + L('NCC', 'Supplier') + '</th><th>' + L('Hiệu lực', 'Validity') + '</th>', inl) + '</div></div>';
+};
+
+Cost.dash.vHow = function (d) {
+  var B = Fmt.esc(d.Cost_board_.base), N = d.Cost_board_.alertDays;
+  var rows = [
+    [L('Tiền gốc', 'Base currency'), L('Ô <code>Config!B3</code> (hiện là ', 'Cell <code>Config!B3</code> (now ') + B + L('). Giá quy đổi = giá nguyên tệ × tỷ giá.', '). Base price = original price × FX rate.')],
+    [L('Tỷ giá của một dòng', 'FX rate of a row'), L('Dòng <code>FX_Rates</code> cùng <code>currency</code> có <code>effective_date</code> mới nhất nhưng ≤ ngày báo giá; tiền gốc = 1. Không có → giá quy đổi trống và báo ở Kiểm tra dữ liệu. App tính lại từ cột gốc, không đọc cột công thức trong Sheet.',
+      'The <code>FX_Rates</code> row with the same <code>currency</code> and the latest <code>effective_date</code> on or before the quote date; base currency = 1. None → blank base price, flagged in Data check. The app recomputes from source columns, not from the sheet formula columns.')],
+    [L('Hiệu lực', 'Validity'), L('Sắp áp dụng: <code>effective_date</code> sau hôm nay · Hết hạn: <code>valid_until</code> trước hôm nay · Không thời hạn: <code>valid_until</code> trống (tính là còn hiệu lực).',
+      'Not yet in effect: <code>effective_date</code> after today · Expired: <code>valid_until</code> before today · Open-ended: <code>valid_until</code> blank (counts as valid).')],
+    [L('Cùng mặt hàng', 'Same item'), L('Cùng sheet nhóm vật tư + cùng giá trị 5 cột <code>spec_*</code> + cùng <code>unit</code>.', 'Same material sheet + same values in the 5 <code>spec_*</code> columns + same <code>unit</code>.')],
+    [L('Giá tham chiếu', 'Reference price'), L('Mỗi NCC lấy báo giá mới nhất (bỏ dòng sắp áp dụng); lấy giá quy đổi thấp nhất trong các dòng còn hiệu lực. "NCC còn hiệu lực" = số NCC có báo giá mới nhất còn hiệu lực / số NCC từng báo giá. "Chênh cao–thấp" = cao nhất ÷ thấp nhất − 1.',
+      "Each supplier's latest quote (quotes not yet in effect are skipped); the lowest base price among the valid ones. \"Suppliers valid\" = suppliers whose latest quote is valid / suppliers that ever quoted. \"High–low spread\" = highest ÷ lowest − 1.")],
+    [L('Lịch sử giá', 'Price history'), L('Mọi dòng của mặt hàng, quy đổi theo tỷ giá tại ngày báo giá của từng dòng.', 'Every row of the item, converted at the FX rate in force on its own quote date.')],
+    [L('Đơn giá công đoạn tự làm', 'In-house process rate'), L('<code>cost_labor + cost_machine + cost_consumables + cost_overhead</code>; so với giá thuê ngoài thấp nhất cùng <code>process_id + product_type + unit</code>.',
+      '<code>cost_labor + cost_machine + cost_consumables + cost_overhead</code>; compared with the lowest subcontract price for the same <code>process_id + product_type + unit</code>.')],
+    [L('Cước biển', 'Sea freight'), L('<code>ocean_freight + surcharges</code>; tuyến = <code>pol + pod + cargo_type + rate_basis</code>.', '<code>ocean_freight + surcharges</code>; lane = <code>pol + pod + cargo_type + rate_basis</code>.')],
+    [L('Phí địa phương', 'Local charges'), L('<code>amount</code> quy đổi, hoặc <code>percent_rate</code> % khi phí tính theo giá trị hàng.', 'Converted <code>amount</code>, or <code>percent_rate</code> % when charged on cargo value.')],
+    [L('Cảnh báo (chuông)', 'Alerts (bell)'), L('Báo giá mới nhất của một NCC còn ≤ ', "A supplier's latest quote has ≤ ") + N + L(' ngày hiệu lực; mặt hàng / tuyến / công đoạn không còn NCC nào có giá hiệu lực.', ' days left; an item / lane / process with no supplier holding a valid price.')]
+  ];
+  return '<div class="card"><h3>' + L('Cách tính', 'How it is calculated') + '</h3><dl class="chow">' + rows.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('') + '</dl></div>';
+};
+
+/* ---------------- Trang 360° riêng ---------------- */
+Cost.r360 = function (view, d, p, opts) {
+  var table = d.table, def = App.table(table), rec = d.record, id = rec[def.pk], x = (d.extra || {}).cost || {};
+  var reload = function () { App.go('entity', { table: table, id: id }, { replace: true }); };
+  view.innerHTML = '<div class="page-head"><div class="title"><div class="crumb"><a id="back">' + Fmt.esc(App.tlabel(table)) + '</a> › <span class="id">' + Fmt.esc(id) + '</span></div><h2>' +
+    Fmt.esc(rec[def.display] || id) + UI.missingBadge(table, rec) + '</h2><div class="muted small">' + Fmt.esc(opts.kind) + '</div></div>' + (opts.actions || '') +
+    '<button class="btn" id="edit">' + (App.canWrite(table) ? '✎ ' + L('Sửa', 'Edit') : L('Xem chi tiết', 'View details')) + '</button></div>' + UI.kpis(opts.kpis) + '<div class="card" id="tabs"></div>';
+  view.querySelector('#back').onclick = function () { App.go('entity', { table: table }); };
+  view.querySelector('#edit').onclick = function () { App.edit(table, rec, { onSaved: reload, onDeleted: function () { App.go('entity', { table: table }); } }); };
+  var tabs = [{ id: 'info', label: L('Thông tin', 'Details'), render: function (el) {
+    el.innerHTML = UI.info(def.columns.filter(function (c) { return c.key !== 'PK'; }).map(function (c) { return [App.clabel(table, c.name), Fmt.cell(c, rec[c.name])]; }));
+  } }].concat(opts.tabs.map(function (t) {
+    return { id: t.id, label: t.label, count: t.count, render: function (el) { el.innerHTML = t.html(); Cost.bind360(el); Cost.bindRowOpen(el, t.rows || []); } };
+  }));
+  if (App.can('activity')) tabs.push({ id: 'log', label: L('Nhật ký', 'Change log'), count: d.activity.length, render: function (el) { el.innerHTML = UI.activityList(d.activity); } });
+  UI.tabs(view.querySelector('#tabs'), tabs, p.tab || (opts.tabs[0] && opts.tabs[0].id));
+  return x;
+};
+/** Bấm một dòng báo giá → mở form xem / sửa dòng đó. */
+Cost.bindRowOpen = function (el, rows) {
+  el.querySelectorAll('tr[data-row]').forEach(function (tr) {
+    tr.addEventListener('click', function (e) {
+      if (e.target.closest('a,button,select')) return;
+      var r = rows[+tr.dataset.row];
+      if (!r) return;
+      App.api('record.get', { table: r._t, id: r._id }).then(function (rec) { App.edit(r._t, rec, { onSaved: App.reload, onDeleted: App.reload }); }).catch(App.fail);
+    });
+  });
+};
+/** Bảng dòng giá dùng chung cho 360°. describe(r) → html. */
+Cost.rowTable = function (rows, x, describe) {
+  return Cost.table('<th>' + L('Bảng', 'Table') + '</th><th>' + L('Mã', 'ID') + '</th><th>' + L('Ngày BG', 'Quote date') + '</th><th>' + L('Nội dung', 'Details') + '</th><th class="num">' +
+    L('Giá nguyên tệ', 'Original price') + '</th><th class="num">' + Fmt.esc(x.base || '') + '</th><th>' + L('Hiệu lực', 'Validity') + '</th>',
+    rows.map(function (r, i) {
+      var pct = r._t === 'Trans_Local_Charges' && r.percent_rate !== undefined && (r._amt === null || r._amt === undefined);
+      return '<tr class="click" data-row="' + i + '"><td>' + Fmt.esc(App.tlabel(r._t)) + '</td><td><span class="id">' + Fmt.esc(r._id) + '</span></td><td>' + Fmt.date(r.effective_date) + '</td><td>' + describe(r) +
+        Cost.doc(r) + '</td><td class="num">' + (pct ? Fmt.num(r.percent_rate, 3) + '%' : Cost.money(r._amt) + ' ' + Fmt.esc(r.currency || '')) + '</td><td class="num">' + (pct ? '—' : Cost.base(r)) +
+        '</td><td>' + Cost.pill(r, x.alertDays) + '</td></tr>';
+    }).join(''), L('Chưa có dữ liệu', 'No data yet'));
+};
+Cost.describe = function (x) {
+  var n = x.names || { suppliers: {}, ports: {}, processes: {} };
+  var pn = function (id) { return Fmt.esc(n.ports[id] || id || ''); };
+  return function (r) {
+    var t = r._t;
+    if (t.indexOf('Mat_') === 0) {
+      var sp = Object.keys(r).filter(function (k) { return k.indexOf('spec_') === 0; }).map(function (k) { return r[k]; }).join(' · ');
+      return Fmt.esc(r.description || '') + ' <span class="small muted">' + Fmt.esc(sp) + (r.unit ? ' · ' + Fmt.esc(r.unit) : '') + '</span>';
+    }
+    if (t === 'Trans_Sea') return pn(r.pol) + ' → ' + pn(r.pod) + ' · ' + Fmt.esc(r.cargo_type || '');
+    if (t === 'Trans_Local_Charges') return Fmt.esc(r.charge_type || '') + ' · ' + pn(r.port) + ' (' + Fmt.esc(r.side === 'Origin' ? L('đầu đi', 'origin') : L('đầu đến', 'destination')) + ')';
+    if (t === 'Trans_Inland_Origin') return Fmt.esc(r.from_place || '') + ' → ' + (r.destination_type === 'Port' ? pn(r.to_port) : Fmt.esc(r.to_site || '')) + ' · ' + Fmt.esc(r.vehicle_type || '');
+    if (t === 'Trans_Inland_Dest') return pn(r.from_port) + ' → ' + Fmt.esc(r.to_site || '') + ' · ' + Fmt.esc(r.vehicle_type || '');
+    if (t.indexOf('Prod_') === 0) return Fmt.esc(n.processes[r.process_id] || r.process_id || '') + ' · ' + Fmt.esc(r.product_type || '') + (r.factory ? ' · ' + Fmt.esc(r.factory) : '') +
+      (r.scope ? '<div class="small muted">' + Fmt.esc(r.scope) + '</div>' : '');
+    return '';
+  };
+};
+
+App.pages.entity.custom360.Suppliers = function (view, d, p) {
+  var x = (d.extra || {}).cost || { rows: [], names: { suppliers: {}, ports: {}, processes: {} } }, id = d.record.supplier_id;
+  var rows = x.rows || [], desc = Cost.describe(x);
+  var areas = [['all', L('Tất cả', 'All'), function () { return true; }], ['mat', L('Vật tư', 'Materials'), function (r) { return r._t.indexOf('Mat_') === 0; }],
+    ['prod', L('Sản xuất', 'Production'), function (r) { return r._t.indexOf('Prod_') === 0; }], ['trans', L('Vận tải', 'Transport'), function (r) { return r._t.indexOf('Trans_') === 0; }],
+    ['doc', L('Tài liệu', 'Documents'), function (r) { return !!(r.doc1_url || r.doc2_url); }]];
+  var live = rows.filter(function (r) { return Cost.isLive(r._st); }).length;
+  var soon = rows.filter(function (r) { return r._st === 'valid' && r._days !== null && r._days <= (x.alertDays || 14); }).length;
+  var types = {}; rows.forEach(function (r) { types[r._t] = 1; });
+  var addable = Object.keys(App.boot.config.tables).filter(function (t) { return App.col(t, 'supplier_id') && t !== 'Suppliers'; });
+  var actions = App.can('write') ? '<select id="add-q" style="width:auto"><option value="">+ ' + L('Thêm báo giá…', 'Add a quote…') + '</option>' +
+    addable.map(function (t) { return '<option value="' + t + '">' + Fmt.esc(App.tlabel(t)) + '</option>'; }).join('') + '</select>' : '';
+  Cost.r360(view, d, p, {
+    kind: L('Nhà cung cấp 360°', 'Supplier 360°') + (d.record.supplier_type ? ' · ' + d.record.supplier_type : '') + (d.record.country ? ' · ' + d.record.country : ''), actions: actions,
+    kpis: [{ label: L('Báo giá', 'Quotes'), value: rows.length, sub: L('trên ', 'across ') + Object.keys(types).length + L(' bảng', ' tables') },
+      { label: L('Còn hiệu lực', 'Valid'), value: live, tone: 'ok' }, { label: L('Hết hạn ≤ ', 'Expiring ≤ ') + (x.alertDays || 14) + L(' ngày', ' days'), value: soon, tone: soon ? 'warn' : '' },
+      { label: L('Nhóm NCC đang rẻ nhất', 'Groups where cheapest'), value: x.wins || 0, sub: L('giá tham chiếu', 'reference price') }],
+    tabs: areas.map(function (a) {
+      var rs = rows.filter(a[2]);
+      return { id: a[0], label: a[1], count: rs.length, rows: rs, html: function () { return Cost.rowTable(rs, x, desc); } };
+    })
+  });
+  var sel = view.querySelector('#add-q');
+  if (sel) sel.onchange = function () {
+    var t = this.value; this.value = '';
+    if (!t) return;
+    App.edit(t, {}, { defaults: { supplier_id: id }, context: { supplier_id: id }, onSaved: function () { App.go('entity', { table: 'Suppliers', id: id }, { replace: true }); } });
+  };
+};
+App.pages.entity.custom360.Ports = function (view, d, p) {
+  var x = (d.extra || {}).cost || {}, desc = Cost.describe(x), n = x.names || { suppliers: {} };
+  var withSup = function (r) { return desc(r) + ' · ' + Fmt.esc(n.suppliers[r.supplier_id] || r.supplier_id || ''); };
+  var T = [['out', L('Tuyến đi (POL)', 'Outbound (POL)'), x.seaOut || []], ['in', L('Tuyến đến (POD)', 'Inbound (POD)'), x.seaIn || []],
+    ['lc', L('Phí địa phương', 'Local charges'), x.local || []], ['inl', L('Nội địa', 'Inland'), x.inland || []]];
+  var uniq = function (rs, k) { var o = {}; rs.forEach(function (r) { if (r[k]) o[r[k]] = 1; }); return Object.keys(o).length; };
+  Cost.r360(view, d, p, {
+    kind: L('Cảng 360°', 'Port 360°') + (d.record.country ? ' · ' + d.record.country : ''),
+    kpis: [{ label: L('Tuyến đi', 'Outbound lanes'), value: uniq(x.seaOut || [], 'pod'), sub: L('cảng đích', 'destination ports') },
+      { label: L('Tuyến đến', 'Inbound lanes'), value: uniq(x.seaIn || [], 'pol'), sub: L('cảng xếp', 'loading ports') },
+      { label: L('Phí địa phương còn hiệu lực', 'Valid local charges'), value: (x.local || []).filter(function (r) { return Cost.isLive(r._st); }).length },
+      { label: L('Chặng nội địa', 'Inland legs'), value: (x.inland || []).length }],
+    tabs: T.map(function (a) { return { id: a[0], label: a[1], count: a[2].length, rows: a[2], html: function () { return Cost.rowTable(a[2], x, withSup); } }; })
+  });
+};
+App.pages.entity.custom360.Processes = function (view, d, p) {
+  var x = (d.extra || {}).cost || {}, n = x.names || { suppliers: {} };
+  var ih = x.inhouse || [], sc = x.sub || [], cap = x.capacity || [], bi = Cost.bestLive(ih), bs = Cost.bestLive(sc);
+  var ihHtml = function () {
+    return Cost.table('<th>' + L('Mã', 'ID') + '</th><th>' + L('Nhà máy', 'Factory') + '</th><th>' + L('Loại SP', 'Product type') + '</th><th>' + L('ĐVT', 'Unit') + '</th>' +
+      Cost.PARTS.map(function (pp) { return '<th class="num">' + Fmt.esc(L(pp[2][0], pp[2][1])) + '</th>'; }).join('') + '<th class="num">' + L('Đơn giá ', 'Rate ') + Fmt.esc(x.base || '') + '</th><th>' + L('Hiệu lực', 'Validity') + '</th>',
+      ih.map(function (r, i) {
+        return '<tr class="click" data-row="' + i + '"><td><span class="id">' + Fmt.esc(r._id) + '</span></td><td>' + Fmt.esc(r.factory || '') + '</td><td>' + Fmt.esc(r.product_type || '') + '</td><td>' + Fmt.esc(r.unit || '') + '</td>' +
+          Cost.PARTS.map(function (pp) { return '<td class="num">' + Cost.money(r[pp[0]]) + '<div class="small muted">' + (r._amt ? Fmt.num((+r[pp[0]] || 0) / r._amt * 100, 0) + '%' : '') + '</div></td>'; }).join('') +
+          '<td class="num"><b>' + Cost.base(r) + '</b></td><td>' + Cost.pill(r, x.alertDays) + '</td></tr>';
+      }).join(''));
+  };
+  var capHtml = function () {
+    return Cost.table('<th>' + L('Nhà máy', 'Factory') + '</th><th>' + L('Loại SP', 'Product type') + '</th><th class="num">' + L('Năng lực', 'Capacity') + '</th><th class="num">' + L('Giờ công / ĐV', 'Man-hours / unit') +
+      '</th><th class="num">' + L('Giờ máy / ĐV', 'Machine-hours / unit') + '</th><th class="num">' + L('Lead time (ngày)', 'Lead time (days)') + '</th><th>' + L('Từ ngày', 'From') + '</th>',
+      cap.map(function (r, i) {
+        return '<tr class="click" data-row="' + i + '"><td>' + Fmt.esc(r.factory || '') + '</td><td>' + Fmt.esc(r.product_type || '') + '</td><td class="num">' + Fmt.num(r.capacity_qty, 2) + ' ' + Fmt.esc(r.unit || '') +
+          (r.capacity_period ? ' / ' + Fmt.esc(r.capacity_period) : '') + '</td><td class="num">' + Fmt.num(r.manhours_per_unit, 2) + '</td><td class="num">' + Fmt.num(r.machinehours_per_unit, 2) + '</td><td class="num">' +
+          Fmt.num(r.lead_time_days, 0) + '</td><td>' + Fmt.date(r.effective_date) + '</td></tr>';
+      }).join(''));
+  };
+  var subs = {}; sc.forEach(function (r) { if (r.supplier_id) subs[r.supplier_id] = 1; });
+  var facs = {}; cap.forEach(function (r) { if (r.factory) facs[r.factory] = 1; });
+  Cost.r360(view, d, p, {
+    kind: L('Công đoạn 360°', 'Process 360°'),
+    kpis: [{ label: L('Đơn giá tự làm thấp nhất', 'Lowest in-house rate'), value: bi ? Cost.money(bi._base) : '—', sub: bi ? Fmt.esc((x.base || '') + ' / ' + (bi.unit || '')) : '' },
+      { label: L('Thuê ngoài thấp nhất', 'Lowest subcontract'), value: bs ? Cost.money(bs._base) : '—', sub: bs ? Fmt.esc(n.suppliers[bs.supplier_id] || bs.supplier_id || '') : '' },
+      { label: L('Nhà thầu phụ báo giá', 'Subcontractors quoting'), value: Object.keys(subs).length }, { label: L('Nhà máy có năng lực', 'Factories with capacity'), value: Object.keys(facs).length }],
+    tabs: [{ id: 'ih', label: L('Tự làm', 'In-house'), count: ih.length, rows: ih, html: ihHtml },
+      { id: 'sc', label: L('Thuê ngoài', 'Subcontract'), count: sc.length, rows: sc, html: function () { return Cost.rowTable(sc, x, Cost.describe(x)); } },
+      { id: 'cap', label: L('Năng lực', 'Capacity'), count: cap.length, rows: cap, html: capHtml }]
+  });
+};
+
+/* ---------------- Danh sách chọn (sheet Config) ---------------- */
+App.pages.lists = {
+  title: function () { return L('Danh sách chọn', 'Dropdown lists'); },
+  render: function (view) {
+    return App.api('cost.lists.get').then(function (res) {
+      var admin = App.can('catalog');
+      view.innerHTML = '<div class="page-head"><div class="title"><h2>' + L('Danh sách chọn', 'Dropdown lists') + '</h2><div class="muted small">' +
+        L('Sheet Config, dòng 8–107 · tiền gốc ', 'Sheet Config, rows 8–107 · base currency ') + '<b>' + Fmt.esc(res.base) + '</b> (Config!B3) · ' +
+        (admin ? L('mỗi dòng một giá trị; Lưu từng danh sách', 'one value per line; save each list') : L('chỉ Admin được sửa', 'only Admin can edit')) + '</div></div></div>' +
+        '<div class="clist">' + res.lists.map(function (l, i) {
+          var inUse = Object.keys(l.used).length;
+          return '<div class="card"><div class="card-head"><h3>' + Fmt.esc(l.name) + '</h3><span class="small muted">' + l.values.length + ' / ' + l.max + '</span></div>' +
+            (admin ? '<textarea id="l' + i + '" data-name="' + Fmt.esc(l.name) + '">' + Fmt.esc(l.values.join('\n')) + '</textarea>' +
+              '<div style="display:flex;gap:8px;align-items:center;margin-top:8px"><button class="btn sm primary" data-save="' + i + '">' + L('Lưu', 'Save') + '</button><span class="small muted">' +
+              (inUse ? inUse + L(' giá trị đang được dùng', ' values in use') : '') + '</span></div>'
+              : '<div>' + l.values.map(function (v) { return UI.badge(v) + (l.used[v] ? '<span class="small muted"> ' + l.used[v] + '</span>' : ''); }).join(' ') + '</div>') + '</div>';
+        }).join('') + '</div>';
+      view.querySelectorAll('[data-save]').forEach(function (btn) {
+        btn.onclick = function () {
+          var ta = view.querySelector('#l' + btn.dataset.save);
+          App.api('cost.lists.save', { name: ta.dataset.name, values: ta.value.split('\n') }).then(function (r) {
+            App.boot.config.lists = r.all;
+            (r.warnings || []).forEach(function (w) { UI.toast(w, 'warn', 7000); });
+            UI.toast(L('Đã lưu danh sách ', 'Saved list ') + ta.dataset.name, 'ok');
+            App.reload();
+          }).catch(App.fail);
+        };
+      });
+    });
+  }
+};
+</script>
