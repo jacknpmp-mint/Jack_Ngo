@@ -1,0 +1,1309 @@
+{
+ "app": {
+  "name": "LSB Selling Price DB",
+  "brand": "LSB Selling Price DB",
+  "subtitle": [
+   "Giá bán theo dự án",
+   "Project selling prices"
+  ],
+  "version": "1.0.0",
+  "schemaVersion": "Selling_Price_Database_R05_EN",
+  "menuTitle": "LSB Price App",
+  "timezone": "Asia/Ho_Chi_Minh",
+  "alertDays": 7,
+  "consts": {},
+  "spreadsheetId": "",
+  "logSheet": "Activity_log"
+ },
+ "features": {
+  "AUTH": true,
+  "ACTIVITY": true,
+  "ALERTS": true,
+  "VIEW360": true
+ },
+ "staff": {
+  "table": "Staff",
+  "id": "staff_id",
+  "email": "email",
+  "name": "full_name",
+  "access": "access_level",
+  "active": "active",
+  "role": "job_role"
+ },
+ "catalogs": [
+  "Staff",
+  "Markets",
+  "Items",
+  "Materials",
+  "FX_Rates"
+ ],
+ "tables": {
+  "Staff": {
+   "label": [
+    "Người dùng app",
+    "App users"
+   ],
+   "prefix": "ST",
+   "idStyle": "seq",
+   "idWidth": 3,
+   "display": "full_name",
+   "labelCols": [
+    "full_name"
+   ],
+   "listCols": [
+    "staff_id",
+    "full_name",
+    "email",
+    "access_level",
+    "active",
+    "job_role"
+   ],
+   "parentFk": "",
+   "groupCol": "",
+   "dateCol": "",
+   "view360": false,
+   "required": [
+    "full_name",
+    "email",
+    "access_level",
+    "active"
+   ],
+   "need": [],
+   "unique": [
+    "email"
+   ],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [
+    "email"
+   ],
+   "long": [],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {
+    "email": "Tài khoản Google dùng mở Web App.",
+    "access_level": "Viewer: xem · Editor: thêm/sửa · Admin: + xóa, danh mục, người dùng."
+   }
+  },
+  "Markets": {
+   "label": [
+    "Thị trường",
+    "Markets"
+   ],
+   "prefix": "TT",
+   "idStyle": "seq",
+   "idWidth": 2,
+   "display": "market_name",
+   "labelCols": [
+    "market_name"
+   ],
+   "listCols": [
+    "market_id",
+    "market_name",
+    "scope",
+    "notes"
+   ],
+   "parentFk": "",
+   "groupCol": "",
+   "dateCol": "",
+   "view360": false,
+   "required": [
+    "market_name"
+   ],
+   "need": [],
+   "unique": [],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [
+    "scope",
+    "notes"
+   ],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {}
+  },
+  "Customers": {
+   "label": [
+    "Khách hàng",
+    "Customers"
+   ],
+   "prefix": "CUS",
+   "idStyle": "seq",
+   "idWidth": 4,
+   "display": "customer_name",
+   "labelCols": [
+    "customer_name"
+   ],
+   "listCols": [
+    "customer_id",
+    "customer_name",
+    "customer_type",
+    "country"
+   ],
+   "parentFk": "",
+   "groupCol": "",
+   "dateCol": "",
+   "view360": true,
+   "required": [
+    "customer_name"
+   ],
+   "need": [],
+   "unique": [],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [
+    "notes"
+   ],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {}
+  },
+  "Items": {
+   "label": [
+    "Hạng mục báo giá",
+    "Quotation items"
+   ],
+   "prefix": "ITM",
+   "idStyle": "seq",
+   "idWidth": 2,
+   "display": "item_name",
+   "labelCols": [
+    "item_name",
+    "unit"
+   ],
+   "listCols": [
+    "item_id",
+    "item_name",
+    "unit",
+    "material_group",
+    "description"
+   ],
+   "parentFk": "",
+   "groupCol": "",
+   "dateCol": "",
+   "view360": false,
+   "required": [
+    "item_name",
+    "unit"
+   ],
+   "need": [],
+   "unique": [],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [
+    "description",
+    "notes"
+   ],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {
+    "unit": "Đơn vị của đơn giá — mỗi hạng mục 1 đơn vị cho mọi dự án để giá so sánh được.",
+    "material_group": "Nhóm vật tư mà hạng mục đại diện (dùng cho tổng hợp theo nhóm vật tư)."
+   }
+  },
+  "Materials": {
+   "label": [
+    "Vật tư",
+    "Materials"
+   ],
+   "prefix": "MAT",
+   "idStyle": "seq",
+   "idWidth": 4,
+   "display": "material_name",
+   "labelCols": [
+    "material_name",
+    "unit"
+   ],
+   "listCols": [
+    "material_id",
+    "material_name",
+    "material_group",
+    "unit",
+    "description"
+   ],
+   "parentFk": "",
+   "groupCol": "",
+   "dateCol": "",
+   "view360": false,
+   "required": [
+    "material_name",
+    "unit"
+   ],
+   "need": [],
+   "unique": [],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [
+    "description",
+    "notes"
+   ],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {
+    "description": "Mô tả chung. Quy cách chi tiết quyết định giá nhập ở Bảng giá vật tư."
+   }
+  },
+  "FX_Rates": {
+   "label": [
+    "Tỷ giá",
+    "FX rates"
+   ],
+   "prefix": "FX",
+   "idStyle": "seq",
+   "idWidth": 4,
+   "display": "currency",
+   "labelCols": [
+    "currency",
+    "effective_date"
+   ],
+   "listCols": [
+    "fx_id",
+    "effective_date",
+    "currency",
+    "rate",
+    "source"
+   ],
+   "parentFk": "",
+   "groupCol": "",
+   "dateCol": "effective_date",
+   "view360": false,
+   "required": [
+    "effective_date",
+    "currency",
+    "rate"
+   ],
+   "need": [],
+   "unique": [],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [
+    "notes"
+   ],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {
+    "effective_date": "Tỷ giá áp dụng từ ngày này tới khi có dòng mới hơn. Ngày + tiền tệ không được trùng.",
+    "currency": "Tiền tệ cần quy đổi (khác tiền gốc VND). Cần có dòng USD để tính các cột USD.",
+    "rate": "Ví dụ 1 USD = 26.000 VND → nhập 26000."
+   }
+  },
+  "Material_Prices": {
+   "label": [
+    "Bảng giá vật tư",
+    "Material prices"
+   ],
+   "prefix": "PRC",
+   "idStyle": "seq",
+   "idWidth": 5,
+   "display": "specification",
+   "labelCols": [
+    "specification",
+    "supplier",
+    "effective_date"
+   ],
+   "listCols": [
+    "price_id",
+    "material_id",
+    "specification",
+    "effective_date",
+    "supplier",
+    "currency",
+    "unit_price"
+   ],
+   "parentFk": "material_id",
+   "groupCol": "",
+   "dateCol": "effective_date",
+   "view360": false,
+   "required": [
+    "material_id",
+    "specification",
+    "effective_date",
+    "currency",
+    "unit_price"
+   ],
+   "need": [],
+   "unique": [],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [
+    "price_terms",
+    "notes"
+   ],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {
+    "specification": "Quy cách quyết định giá (mác thép, độ dày, tiêu chuẩn, lớp phủ…). Mỗi quy cách là 1 dòng giá riêng.",
+    "effective_date": "Ngày giá bắt đầu áp dụng (dùng tra tỷ giá của dòng).",
+    "price_terms": "Điều kiện giao hàng, VAT, thanh toán…"
+   }
+  },
+  "Projects": {
+   "label": [
+    "Dự án",
+    "Projects"
+   ],
+   "prefix": "PRJ",
+   "idStyle": "seq",
+   "idWidth": 4,
+   "display": "project_name",
+   "labelCols": [
+    "project_name"
+   ],
+   "listCols": [
+    "project_id",
+    "project_name",
+    "customer_id",
+    "market_id",
+    "quote_date",
+    "status",
+    "job_no",
+    "sell_currency"
+   ],
+   "parentFk": "customer_id",
+   "groupCol": "",
+   "dateCol": "quote_date",
+   "view360": true,
+   "required": [
+    "project_name",
+    "customer_id",
+    "market_id",
+    "status",
+    "sell_currency",
+    "cost_currency",
+    "fx_date"
+   ],
+   "need": [],
+   "unique": [],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [
+    "notes"
+   ],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {
+    "quote_date": "Ngày phát hành báo giá — dùng lọc theo kỳ trong các trang phân tích.",
+    "contract_date": "Để trống nếu chưa ký.",
+    "job_no": "Số Job nội bộ khi dự án thành Job; để trống khi còn báo giá.",
+    "sell_currency": "Tiền tệ của giá bán hạng mục.",
+    "cost_currency": "Tiền tệ dùng nhập chi phí hạng mục.",
+    "fx_date": "Ngày dùng tra tỷ giá bán, chi phí và USD của dự án.",
+    "owner": "Người lập / chịu trách nhiệm báo giá."
+   }
+  },
+  "Project_Items": {
+   "label": [
+    "Giá hạng mục dự án",
+    "Project item prices"
+   ],
+   "prefix": "PIT",
+   "idStyle": "seq",
+   "idWidth": 5,
+   "display": "item_id",
+   "labelCols": [
+    "project_id",
+    "item_id",
+    "stage"
+   ],
+   "listCols": [
+    "line_id",
+    "project_id",
+    "item_id",
+    "stage",
+    "unit_sell",
+    "gm_pct"
+   ],
+   "parentFk": "project_id",
+   "groupCol": "",
+   "dateCol": "",
+   "view360": false,
+   "required": [
+    "project_id",
+    "item_id",
+    "stage",
+    "cost_material",
+    "unit_sell"
+   ],
+   "need": [],
+   "unique": [],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [
+    "notes"
+   ],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {
+    "stage": "Bid hoặc Job. Một dự án có thể có cả dòng Bid và Job cho cùng hạng mục.",
+    "cost_material": "Theo tiền tệ chi phí của dự án.",
+    "cost_other": "Giải thích ở Ghi chú. Không nhập cước ở đây (nhập ở Cước vận chuyển).",
+    "unit_sell": "Theo tiền tệ bán của dự án."
+   }
+  },
+  "Project_Freight": {
+   "label": [
+    "Cước vận chuyển",
+    "Project freight"
+   ],
+   "prefix": "FRT",
+   "idStyle": "seq",
+   "idWidth": 5,
+   "display": "incoterm",
+   "labelCols": [
+    "project_id",
+    "incoterm",
+    "destination_port"
+   ],
+   "listCols": [
+    "freight_id",
+    "project_id",
+    "incoterm",
+    "destination_port",
+    "cost_basis",
+    "currency",
+    "freight_cost"
+   ],
+   "parentFk": "project_id",
+   "groupCol": "",
+   "dateCol": "",
+   "view360": false,
+   "required": [
+    "project_id",
+    "incoterm",
+    "cost_basis",
+    "currency",
+    "freight_cost"
+   ],
+   "need": [],
+   "unique": [],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [
+    "site_location",
+    "notes"
+   ],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {
+    "incoterm": "Điều kiện giao hàng tương ứng với cước này.",
+    "cost_basis": "Cước ở cột kế tiếp tính theo đơn vị nào (container, chuyến…)."
+   }
+  },
+  "Project_Inputs_Bid": {
+   "label": [
+    "Vật tư đầu vào - Bid",
+    "Material inputs - bid"
+   ],
+   "prefix": "INB",
+   "idStyle": "seq",
+   "idWidth": 5,
+   "display": "specification",
+   "labelCols": [
+    "project_id",
+    "material_id",
+    "specification"
+   ],
+   "listCols": [
+    "input_id",
+    "project_id",
+    "material_id",
+    "specification",
+    "currency",
+    "unit_price",
+    "spec_check"
+   ],
+   "parentFk": "project_id",
+   "groupCol": "",
+   "dateCol": "",
+   "view360": false,
+   "required": [
+    "project_id",
+    "material_id",
+    "specification",
+    "currency",
+    "unit_price"
+   ],
+   "need": [],
+   "unique": [],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [
+    "notes"
+   ],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {
+    "specification": "Viết giống hệt ở Bid và Job để so sánh được.",
+    "price_id": "Dòng bảng giá dùng so sánh (tùy chọn) — danh sách lọc theo vật tư đã chọn."
+   }
+  },
+  "Project_Inputs_Job": {
+   "label": [
+    "Vật tư đầu vào - Job",
+    "Material inputs - job"
+   ],
+   "prefix": "INJ",
+   "idStyle": "seq",
+   "idWidth": 5,
+   "display": "specification",
+   "labelCols": [
+    "project_id",
+    "material_id",
+    "specification"
+   ],
+   "listCols": [
+    "input_id",
+    "project_id",
+    "material_id",
+    "specification",
+    "price_date",
+    "currency",
+    "unit_price",
+    "var_vs_bid_pct"
+   ],
+   "parentFk": "project_id",
+   "groupCol": "",
+   "dateCol": "price_date",
+   "view360": false,
+   "required": [
+    "project_id",
+    "material_id",
+    "specification",
+    "price_date",
+    "currency",
+    "unit_price"
+   ],
+   "need": [],
+   "unique": [],
+   "pct": {},
+   "range": {},
+   "url": [],
+   "email": [],
+   "long": [
+    "notes"
+   ],
+   "money": [],
+   "calc": {},
+   "types": {},
+   "fk": {},
+   "soft": [],
+   "notes": {
+    "specification": "Viết giống hệt ở Bid và Job để so sánh được.",
+    "price_date": "Ngày chốt / mua giá thực tế — dùng tra tỷ giá của dòng.",
+    "price_id": "Dòng bảng giá dùng so sánh (tùy chọn) — danh sách lọc theo vật tư đã chọn."
+   }
+  }
+ },
+ "menu": [
+  {
+   "group": [
+    "Phân tích",
+    "Analysis"
+   ],
+   "items": [
+    {
+     "route": "price_lookup",
+     "label": [
+      "Tra cứu giá tham khảo",
+      "Price reference"
+     ],
+     "icon": "⌕"
+    },
+    {
+     "route": "price_summary",
+     "label": [
+      "Tổng hợp",
+      "Summaries"
+     ],
+     "icon": "▤"
+    },
+    {
+     "route": "bid_job",
+     "label": [
+      "Bid vs Job",
+      "Bid vs Job"
+     ],
+     "icon": "⇄"
+    }
+   ]
+  },
+  {
+   "group": [
+    "Dự án",
+    "Projects"
+   ],
+   "items": [
+    {
+     "table": "Projects",
+     "icon": "◧"
+    },
+    {
+     "table": "Project_Items",
+     "icon": "▪"
+    },
+    {
+     "table": "Project_Freight",
+     "icon": "⛴"
+    },
+    {
+     "table": "Project_Inputs_Bid",
+     "icon": "▫"
+    },
+    {
+     "table": "Project_Inputs_Job",
+     "icon": "▫"
+    }
+   ]
+  },
+  {
+   "group": [
+    "Giá & tỷ giá",
+    "Prices & FX"
+   ],
+   "items": [
+    {
+     "table": "Material_Prices",
+     "icon": "₫"
+    },
+    {
+     "table": "FX_Rates",
+     "icon": "⇆"
+    }
+   ]
+  },
+  {
+   "group": [
+    "Danh mục",
+    "Masters"
+   ],
+   "items": [
+    {
+     "table": "Customers",
+     "icon": "☺"
+    },
+    {
+     "table": "Markets",
+     "icon": "◎"
+    },
+    {
+     "table": "Items",
+     "icon": "▦"
+    },
+    {
+     "table": "Materials",
+     "icon": "▣"
+    },
+    {
+     "route": "lists",
+     "label": [
+      "Danh sách chọn (Config)",
+      "Dropdown lists (Config)"
+     ],
+     "icon": "☰"
+    },
+    {
+     "table": "Staff",
+     "icon": "⚿"
+    }
+   ]
+  }
+ ],
+ "dateOrder": [],
+ "alerts": [],
+ "dashboard": {
+  "kpiTables": [
+   "Projects",
+   "Project_Items",
+   "Project_Inputs_Bid",
+   "Project_Inputs_Job",
+   "Project_Freight",
+   "Material_Prices",
+   "Customers",
+   "FX_Rates"
+  ],
+  "metrics": [
+   {
+    "label": [
+     "Dự án báo giá",
+     "Projects quoted"
+    ],
+    "table": "Projects",
+    "date": "quote_date",
+    "sum": "",
+    "where": {}
+   },
+   {
+    "label": [
+     "— đang Won",
+     "— now Won"
+    ],
+    "table": "Projects",
+    "date": "quote_date",
+    "sum": "",
+    "where": {
+     "status": "Won"
+    }
+   },
+   {
+    "label": [
+     "— Completed",
+     "— Completed"
+    ],
+    "table": "Projects",
+    "date": "quote_date",
+    "sum": "",
+    "where": {
+     "status": "Completed"
+    }
+   },
+   {
+    "label": [
+     "— Lost",
+     "— Lost"
+    ],
+    "table": "Projects",
+    "date": "quote_date",
+    "sum": "",
+    "where": {
+     "status": "Lost"
+    }
+   }
+  ],
+  "providers": []
+ },
+ "needExtra": {},
+ "autoUser": {},
+ "defaults": {},
+ "providers": {
+  "init": [
+   "Spd_init_"
+  ],
+  "hooks": [
+   "Spd_hooks_"
+  ],
+  "routes": [
+   "Spd_routes_"
+  ],
+  "related": [],
+  "extra360": [],
+  "alerts": [
+   "Spd_alerts_"
+  ],
+  "checks": [
+   "Spd_checks_"
+  ]
+ },
+ "labels": {
+  "columns": {
+   "Markets.market_id": [
+    "Mã thị trường",
+    "Market ID"
+   ],
+   "Customers.customer_id": [
+    "Mã khách hàng",
+    "Customer ID"
+   ],
+   "Items.item_id": [
+    "Mã hạng mục",
+    "Item ID"
+   ],
+   "Items.unit": [
+    "Đơn vị tính giá",
+    "Price unit"
+   ],
+   "Items.description": [
+    "Phạm vi hạng mục",
+    "Scope description"
+   ],
+   "Materials.material_id": [
+    "Mã vật tư",
+    "Material ID"
+   ],
+   "Material_Prices.price_id": [
+    "Mã dòng giá",
+    "Price row ID"
+   ],
+   "Projects.project_id": [
+    "Mã dự án",
+    "Project ID"
+   ],
+   "Project_Freight.fx_rate": [
+    "Tỷ giá (ngày tỷ giá dự án)",
+    "FX rate (project FX date)"
+   ],
+   "Project_Inputs_Bid.specification": [
+    "Quy cách áp dụng",
+    "Applied specification"
+   ],
+   "Project_Inputs_Bid.price_id": [
+    "Dòng giá tham chiếu",
+    "Reference price row"
+   ],
+   "Project_Inputs_Bid.unit_price": [
+    "Đơn giá Bid (tiền gốc / ĐV)",
+    "Bid unit price (original / unit)"
+   ],
+   "Project_Inputs_Bid.unit_price_base": [
+    "Đơn giá Bid (VND / ĐV)",
+    "Bid unit price (VND / unit)"
+   ],
+   "Project_Inputs_Bid.unit_price_usd": [
+    "Đơn giá Bid (USD / ĐV)",
+    "Bid unit price (USD / unit)"
+   ],
+   "Project_Inputs_Job.specification": [
+    "Quy cách áp dụng",
+    "Applied specification"
+   ],
+   "Project_Inputs_Job.supplier": [
+    "Nhà cung cấp thực tế",
+    "Actual supplier"
+   ],
+   "Project_Inputs_Job.price_id": [
+    "Dòng giá tham chiếu",
+    "Reference price row"
+   ],
+   "Project_Inputs_Job.unit_price": [
+    "Đơn giá thực tế (tiền gốc / ĐV)",
+    "Actual unit price (original / unit)"
+   ],
+   "Project_Inputs_Job.unit_price_base": [
+    "Đơn giá thực tế (VND / ĐV)",
+    "Actual unit price (VND / unit)"
+   ],
+   "Project_Inputs_Job.unit_price_usd": [
+    "Đơn giá thực tế (USD / ĐV)",
+    "Actual unit price (USD / unit)"
+   ],
+   "notes": [
+    "Ghi chú",
+    "Notes"
+   ],
+   "market_id": [
+    "Thị trường",
+    "Market"
+   ],
+   "market_name": [
+    "Tên thị trường",
+    "Market name"
+   ],
+   "scope": [
+    "Phạm vi",
+    "Scope / description"
+   ],
+   "customer_id": [
+    "Khách hàng",
+    "Customer"
+   ],
+   "customer_name": [
+    "Tên khách hàng",
+    "Customer name"
+   ],
+   "customer_type": [
+    "Loại khách hàng",
+    "Customer type"
+   ],
+   "country": [
+    "Quốc gia",
+    "Country"
+   ],
+   "item_id": [
+    "Hạng mục",
+    "Item"
+   ],
+   "item_name": [
+    "Tên hạng mục",
+    "Item name"
+   ],
+   "unit": [
+    "Đơn vị",
+    "Unit"
+   ],
+   "material_group": [
+    "Nhóm vật tư",
+    "Material group"
+   ],
+   "description": [
+    "Mô tả",
+    "Description"
+   ],
+   "material_id": [
+    "Vật tư",
+    "Material"
+   ],
+   "material_name": [
+    "Tên vật tư",
+    "Material name"
+   ],
+   "effective_date": [
+    "Ngày hiệu lực",
+    "Effective date"
+   ],
+   "currency": [
+    "Tiền tệ",
+    "Currency"
+   ],
+   "base_currency": [
+    "Tiền tệ gốc",
+    "Base currency"
+   ],
+   "rate": [
+    "Tỷ giá (1 đơn vị = ? VND)",
+    "Rate (1 unit = ? VND)"
+   ],
+   "source": [
+    "Nguồn",
+    "Source"
+   ],
+   "fx_id": [
+    "Mã tỷ giá",
+    "FX row ID"
+   ],
+   "price_id": [
+    "Dòng giá",
+    "Price row"
+   ],
+   "specification": [
+    "Quy cách",
+    "Specification"
+   ],
+   "supplier": [
+    "Nhà cung cấp",
+    "Supplier"
+   ],
+   "unit_price": [
+    "Đơn giá (tiền gốc / ĐV)",
+    "Unit price (original / unit)"
+   ],
+   "fx_rate": [
+    "Tỷ giá",
+    "FX rate"
+   ],
+   "unit_price_base": [
+    "Đơn giá (VND / ĐV)",
+    "Unit price (VND / unit)"
+   ],
+   "unit_price_usd": [
+    "Đơn giá (USD / ĐV)",
+    "Unit price (USD / unit)"
+   ],
+   "fx_usd": [
+    "Tỷ giá USD",
+    "FX rate - USD"
+   ],
+   "price_terms": [
+    "Điều kiện giá",
+    "Price terms"
+   ],
+   "project_id": [
+    "Dự án",
+    "Project"
+   ],
+   "project_name": [
+    "Tên dự án",
+    "Project name"
+   ],
+   "quote_date": [
+    "Ngày báo giá",
+    "Quotation date"
+   ],
+   "contract_date": [
+    "Ngày ký HĐ",
+    "Contract date"
+   ],
+   "status": [
+    "Trạng thái",
+    "Status"
+   ],
+   "job_no": [
+    "Số Job",
+    "Job No."
+   ],
+   "sell_currency": [
+    "Tiền tệ bán",
+    "Selling currency"
+   ],
+   "cost_currency": [
+    "Tiền tệ chi phí",
+    "Cost currency"
+   ],
+   "fx_date": [
+    "Ngày tỷ giá",
+    "FX date"
+   ],
+   "fx_sell": [
+    "Tỷ giá bán",
+    "FX rate - selling"
+   ],
+   "fx_cost": [
+    "Tỷ giá chi phí",
+    "FX rate - cost"
+   ],
+   "item_rows": [
+    "Số dòng hạng mục",
+    "Item rows"
+   ],
+   "gm_pct_bid": [
+    "GM% TB - Bid",
+    "Avg GM% - bid"
+   ],
+   "gm_pct_job": [
+    "GM% TB - Job",
+    "Avg GM% - job"
+   ],
+   "freight_rows": [
+    "Số dòng cước",
+    "Freight rows"
+   ],
+   "owner": [
+    "Người phụ trách",
+    "Person in charge"
+   ],
+   "data_check": [
+    "Kiểm tra dữ liệu",
+    "Data check"
+   ],
+   "line_id": [
+    "Mã dòng",
+    "Row ID"
+   ],
+   "freight_id": [
+    "Mã dòng",
+    "Row ID"
+   ],
+   "input_id": [
+    "Mã dòng",
+    "Row ID"
+   ],
+   "stage": [
+    "Giai đoạn",
+    "Stage"
+   ],
+   "cost_material": [
+    "CP vật tư (/ĐV)",
+    "Material cost (/unit)"
+   ],
+   "cost_fabrication": [
+    "CP gia công (/ĐV)",
+    "Fabrication cost (/unit)"
+   ],
+   "cost_erection": [
+    "CP lắp dựng (/ĐV)",
+    "Erection cost (/unit)"
+   ],
+   "cost_other": [
+    "CP khác (/ĐV)",
+    "Other cost (/unit)"
+   ],
+   "unit_cost": [
+    "Giá vốn (tiền chi phí / ĐV)",
+    "Unit cost (cost currency / unit)"
+   ],
+   "unit_sell": [
+    "Giá bán (tiền bán / ĐV)",
+    "Unit selling price (selling currency / unit)"
+   ],
+   "unit_sell_base": [
+    "Giá bán (VND / ĐV)",
+    "Unit selling price (VND / unit)"
+   ],
+   "unit_cost_base": [
+    "Giá vốn (VND / ĐV)",
+    "Unit cost (VND / unit)"
+   ],
+   "gm_unit": [
+    "Lãi gộp (VND / ĐV)",
+    "Gross margin (VND / unit)"
+   ],
+   "gm_pct": [
+    "Lãi gộp %",
+    "Gross margin %"
+   ],
+   "unit_sell_usd": [
+    "Giá bán (USD / ĐV)",
+    "Unit selling price (USD / unit)"
+   ],
+   "unit_cost_usd": [
+    "Giá vốn (USD / ĐV)",
+    "Unit cost (USD / unit)"
+   ],
+   "gm_unit_usd": [
+    "Lãi gộp (USD / ĐV)",
+    "Gross margin (USD / unit)"
+   ],
+   "incoterm": [
+    "Incoterm",
+    "Incoterm"
+   ],
+   "destination_port": [
+    "Cảng đích",
+    "Destination port"
+   ],
+   "site_location": [
+    "Địa điểm công trình",
+    "Site location"
+   ],
+   "cost_basis": [
+    "Đơn vị tính cước",
+    "Freight cost basis"
+   ],
+   "freight_cost": [
+    "Cước (tiền gốc / đơn vị tính)",
+    "Freight cost (original / basis)"
+   ],
+   "freight_cost_base": [
+    "Cước (VND / đơn vị tính)",
+    "Freight cost (VND / basis)"
+   ],
+   "freight_cost_usd": [
+    "Cước (USD / đơn vị tính)",
+    "Freight cost (USD / basis)"
+   ],
+   "ref_specification": [
+    "Quy cách dòng giá tham chiếu",
+    "Spec of reference price row"
+   ],
+   "spec_check": [
+    "Kiểm tra quy cách",
+    "Spec check"
+   ],
+   "list_price_base": [
+    "Giá bảng giá (VND / ĐV)",
+    "Price-list price (VND / unit)"
+   ],
+   "list_price_usd": [
+    "Giá bảng giá (USD / ĐV)",
+    "Price-list price (USD / unit)"
+   ],
+   "var_vs_list_pct": [
+    "Chênh so bảng giá %",
+    "Variance vs price list %"
+   ],
+   "price_date": [
+    "Ngày giá thực tế",
+    "Actual price date"
+   ],
+   "bid_unit_price_base": [
+    "Đơn giá Bid (VND / ĐV)",
+    "Bid unit price (VND / unit)"
+   ],
+   "bid_unit_price_usd": [
+    "Đơn giá Bid (USD / ĐV)",
+    "Bid unit price (USD / unit)"
+   ],
+   "var_vs_bid_pct": [
+    "Chênh so Bid %",
+    "Variance vs bid %"
+   ],
+   "staff_id": [
+    "Mã nhân sự",
+    "Staff ID"
+   ],
+   "full_name": [
+    "Họ tên",
+    "Full name"
+   ],
+   "email": [
+    "Email Google",
+    "Google email"
+   ],
+   "access_level": [
+    "Quyền app",
+    "App access"
+   ],
+   "active": [
+    "Đang hoạt động",
+    "Active"
+   ],
+   "job_role": [
+    "Vai trò công việc",
+    "Job role"
+   ]
+  },
+  "notesEn": {
+   "Staff.email": "Google account used to open the web app",
+   "Staff.access_level": "Viewer (read) / Editor (add, edit) / Admin (+ delete, masters, users)",
+   "Items.unit": "Unit that the item unit price is quoted in (one unit per item for all projects, so prices are comparable). Pick from Config > Unit",
+   "Items.material_group": "Material group this item represents (drives selling price / gross margin summaries by material group). Pick from Config > Material group",
+   "Materials.description": "General description. The detailed specification that drives the price is entered in Material_Prices",
+   "FX_Rates.effective_date": "Rate applies from this date until a newer row exists",
+   "FX_Rates.currency": "Currency to convert (other than the base currency)",
+   "FX_Rates.rate": "Example: if 1 USD = 26,000 VND enter 26000",
+   "Material_Prices.specification": "Specification that drives the unit price (grade, thickness, standard, coating...). Each different spec of the same material is a separate price row",
+   "Material_Prices.effective_date": "Date the price starts to apply",
+   "Material_Prices.price_terms": "Delivery terms, VAT, payment...",
+   "Projects.quote_date": "Date the quotation was issued",
+   "Projects.contract_date": "Leave blank if not signed",
+   "Projects.job_no": "Internal job number once the project becomes a job; blank while still at bid stage",
+   "Projects.sell_currency": "Currency of the unit selling prices",
+   "Projects.cost_currency": "Currency used to enter item unit costs",
+   "Projects.fx_date": "Date used to look up FX rates for the project",
+   "Projects.owner": "Estimator / person responsible for the quotation",
+   "Project_Items.stage": "Bid or Job. A project can hold both a bid row and a job row for the same item. Pick from Config > Stage",
+   "Project_Items.cost_material": "Material cost per unit, in the project's cost currency",
+   "Project_Items.cost_other": "Other cost per unit (explain in Notes). Freight is NOT entered here but in Project_Freight",
+   "Project_Items.unit_sell": "Item unit selling price in the project's selling currency",
+   "Project_Freight.incoterm": "Delivery term that this freight cost corresponds to. Pick from Config > Incoterm",
+   "Project_Freight.cost_basis": "What the cost in the next column is charged per. Pick from Config > Freight cost basis",
+   "Project_Inputs_Bid.specification": "Material spec used for the project. Write it identically in the Bid and Job sheets so they can be compared",
+   "Project_Inputs_Bid.price_id": "Row in Material_Prices used for comparison (optional)",
+   "Project_Inputs_Job.specification": "Material spec used for the project. Write it identically in the Bid and Job sheets so they can be compared",
+   "Project_Inputs_Job.price_date": "Date the actual price was fixed / purchased; used to look up the FX rate of this row",
+   "Project_Inputs_Job.price_id": "Row in Material_Prices used for comparison (optional)"
+  }
+ }
+}

@@ -1,0 +1,577 @@
+<style>
+/* Custom.html — giao diện riêng LSB Selling Price DB */
+.spd-filters{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.spd-filters label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);min-width:0}
+.spd-filters select{max-width:260px}
+.spd-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between;margin-bottom:12px}
+.spd-warnbox{border:1px solid var(--warn);background:var(--warn-soft);color:#6B4A00;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:13px}
+.spd-chart svg{width:100%;min-width:520px;height:auto}
+.spd-chart text{fill:var(--muted);font-size:11px}
+.spd-chart line{stroke:var(--line)}
+.spd-legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:4px}
+.spd-legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.pos{color:var(--ok)} .neg{color:var(--danger)}
+.form-preview{grid-column:1/-1;background:var(--blue-soft);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:13px;color:#16456F}
+.form-preview b{font-variant-numeric:tabular-nums}
+.form-preview .pv{display:flex;flex-wrap:wrap;gap:4px 18px}
+.form-preview .bad{color:var(--danger)}
+.spd-chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.spd-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:16px;padding:3px 6px 3px 10px;font-size:13px;background:#fff}
+.spd-chip .u{font-size:11px;color:var(--muted)}
+.spd-chip button{border:0;background:none;cursor:pointer;color:var(--danger);font-size:14px;line-height:1;padding:0 2px}
+.spd-lists{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.spd-lists .card{margin:0}
+.spd-add{display:flex;gap:6px}
+.spd-add input{flex:1;min-width:0}
+</style>
+<script>
+/**
+ * Custom.html — Giao diện RIÊNG của LSB Selling Price DB (theo bản mẫu đã duyệt 26/10/2026).
+ *  - Trang Phân tích: Tra cứu giá tham khảo (price_lookup), Tổng hợp (price_summary, thay các sheet Sum_*), Bid vs Job (bid_job).
+ *  - Dự án 360° riêng: KPI tỷ giá / GM% Bid / Job, tab hạng mục / cước / vật tư Bid / vật tư Job, nút Chép Bid → Job.
+ *  - Danh sách chọn (lists): Admin thêm / xóa giá trị dropdown trong sheet Config.
+ *  - Xem trước giá trị tính trong form (UI.FORM_PREVIEW): tỷ giá, giá quy đổi VND / USD, GM%.
+ * Số liệu do server tính lại từ dữ liệu gốc (20_Spd.gs › Spd_compute_), giống công thức trong Sheet.
+ */
+var Spd = {
+  D: null, at: 0,
+  cur: (function () { try { return localStorage.getItem('spd.cur') === 'BASE' ? 'BASE' : 'USD'; } catch (e) { return 'USD'; } })(),
+  F: { item: null, grp: '', mkt: '', cus: '', ctype: '', stg: '', from: '', to: '' },
+  sum: { by: 'cus', stg: 'Bid' },
+  load: function (force) {
+    if (Spd.D && !force && Date.now() - Spd.at < 60000) return Promise.resolve(Spd.D);
+    return App.api('spd.data').then(function (d) {
+      Spd.D = d; Spd.at = Date.now();
+      Spd.P = {}; d.projects.forEach(function (p) { Spd.P[p.id] = p; });
+      Spd.C = {}; d.customers.forEach(function (c) { Spd.C[c.id] = c; });
+      Spd.M = {}; d.markets.forEach(function (m) { Spd.M[m.id] = m; });
+      return d;
+    });
+  },
+  setCur: function (c) { Spd.cur = c; try { localStorage.setItem('spd.cur', c); } catch (e) { /* bỏ qua */ } },
+  curName: function () { return Spd.cur === 'USD' ? 'USD' : ((Spd.D && Spd.D.base) || 'VND'); },
+  /** Giá trị theo tiền đang xem: base (VND) hoặc USD (cột USD lưu trên từng dòng). */
+  v: function (b, u) { return Spd.cur === 'USD' ? u : b; },
+  num: function (v, small) {
+    if (v === null || v === undefined || v === '' || isNaN(v)) return '—';
+    var d = Spd.cur === 'USD' ? (Math.abs(v) < 100 ? 3 : 0) : (Math.abs(v) < 10 ? 2 : 0);
+    if (small !== undefined) d = small;
+    return Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  },
+  money: function (b, u) { return Spd.num(Spd.v(b, u)); },
+  raw: function (v) { return v === null || v === undefined || v === '' ? '—' : Number(v).toLocaleString('en-US', { maximumFractionDigits: 4 }); },
+  pct: function (v) { return v === null || v === undefined || isNaN(v) ? '—' : (v * 100).toFixed(1) + '%'; },
+  sgn: function (v) { return v === null || v === undefined ? '—' : '<span class="' + (v >= 0 ? 'pos' : 'neg') + '">' + (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%</span>'; },
+  avg: function (a) { a = a.filter(function (x) { return x !== null && x !== undefined && !isNaN(x); }); return a.length ? a.reduce(function (s, x) { return s + x; }, 0) / a.length : null; },
+  q: function (d) { return d ? String(d).slice(0, 4) + '-Q' + (Math.floor((+String(d).slice(5, 7) - 1) / 3) + 1) : ''; },
+  stage: function (s) { return UI.badge(s, s === (Spd.D && Spd.D.stage.job) ? 'blue' : 'warn'); },
+  check: function (s) { return s ? UI.badge(s, s === 'OK' ? 'ok' : 'danger') : '—'; },
+  won: function (st) { return st === 'Won' || st === 'Completed'; },
+  /** Thanh tiền tệ USD / VND (dùng chung các trang phân tích). */
+  curSeg: function () {
+    var b = (Spd.D && Spd.D.base) || 'VND';
+    return '<div class="seg" role="group"><button type="button" data-cur="USD" class="' + (Spd.cur === 'USD' ? 'on' : '') + '">USD</button>' +
+      '<button type="button" data-cur="BASE" class="' + (Spd.cur === 'BASE' ? 'on' : '') + '">' + Fmt.esc(b) + '</button></div>';
+  },
+  bindCur: function (root, redraw) {
+    root.querySelectorAll('[data-cur]').forEach(function (b) { b.onclick = function () { Spd.setCur(b.dataset.cur); redraw(); }; });
+  },
+  opts: function (pairs, sel, all) {
+    return '<option value="">' + Fmt.esc(all === undefined ? L('Tất cả', 'All') : all) + '</option>' + pairs.map(function (p) {
+      return '<option value="' + Fmt.esc(p[0]) + '"' + (String(p[0]) === String(sel) ? ' selected' : '') + '>' + Fmt.esc(p[1]) + '</option>';
+    }).join('');
+  },
+  prj: function (id) { var p = Spd.P[id] || {}; return '<span class="id">' + Fmt.esc(id) + '</span> ' + Fmt.esc(p.name || ''); },
+  how: function (items) { return '<details class="dash-how"><summary>' + L('Cách tính', 'How it is calculated') + '</summary><ul>' + items.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul></details>'; },
+  go360: function (id) { App.go('entity', { table: 'Projects', id: id }); }
+};
+
+/* Màu trạng thái riêng DB */
+STATUS_TONE.warn.push('Quoting');
+STATUS_TONE.blue.push('Completed');
+/* % hiển thị 1 số lẻ (GM%, chênh lệch) */
+(function () {
+  var cell = Fmt.cell;
+  Fmt.cell = function (col, v) { return col && col.pct && v !== '' && v !== null && v !== undefined ? Fmt.pct(v, 1) : cell(col, v); };
+})();
+/* Dữ liệu phân tích cũ sau khi lưu / xóa / chép → tải lại lần sau */
+(function () {
+  var api = App.api;
+  App.api = function (action, payload) {
+    var p = api(action, payload);
+    if (/^(record\.(save|delete)|spd\.(copyToJob|listAdd|listRemove))$/.test(action)) p.then(function () { Spd.D = null; }, function () {});
+    return p;
+  };
+})();
+
+/* ============================ Tra cứu giá tham khảo ============================ */
+App.pages.price_lookup = {
+  title: function () { return L('Tra cứu giá tham khảo', 'Price reference'); },
+  render: function (view) {
+    return Spd.load().then(function (D) {
+      if (Spd.F.item === null) Spd.F.item = D.items.length ? D.items[0].id : '';
+      App.pages.price_lookup.draw(view, D);
+    });
+  },
+  draw: function (view, D) {
+    var F = Spd.F, me = App.pages.price_lookup;
+    var C = Spd.C, qs = [];
+    D.projects.forEach(function (p) { var x = Spd.q(p.qd); if (x && qs.indexOf(x) < 0) qs.push(x); });
+    qs.sort();
+    var L1 = D.lines.filter(function (l) {
+      return (!F.item || l.item === F.item) && (!F.grp || l.grp === F.grp) && (!F.mkt || l.mkt === F.mkt) && (!F.cus || l.cus === F.cus) &&
+        (!F.ctype || (C[l.cus] || {}).type === F.ctype) && (!F.stg || l.stg === F.stg) && (!F.from || Spd.q(l.qd) >= F.from) && (!F.to || Spd.q(l.qd) <= F.to);
+    });
+    var sel = L1.map(function (l) { return Spd.v(l.sellB, l.sellU); }).filter(function (x) { return x !== null; });
+    var units = []; L1.forEach(function (l) { if (l.unit && units.indexOf(l.unit) < 0) units.push(l.unit); });
+    var nPrj = {}; L1.forEach(function (l) { nPrj[l.prj] = 1; });
+    var grps = []; D.items.forEach(function (i) { if (i.grp && grps.indexOf(i.grp) < 0) grps.push(i.grp); });
+    var cn = Spd.curName();
+    view.innerHTML = '<div id="spd">' +
+      '<div class="page-head"><div class="title"><h2>' + L('Tra cứu giá tham khảo', 'Price reference') + '</h2><div class="muted small">' + L('Dùng khi báo giá dự án mới: chọn hạng mục và điều kiện tương tự để xem giá các dự án trước.', 'For a new quotation: pick the item and similar conditions to see prices from past projects.') + '</div></div>' + Spd.curSeg() + '</div>' +
+      '<div class="card"><div class="spd-filters">' +
+      '<label>' + L('Hạng mục', 'Item') + '<select data-f="item">' + Spd.opts(D.items.map(function (i) { return [i.id, i.id + ' · ' + i.name + ' (' + i.unit + ')']; }), F.item) + '</select></label>' +
+      '<label>' + L('Nhóm vật tư', 'Material group') + '<select data-f="grp">' + Spd.opts(grps.map(function (g) { return [g, g]; }), F.grp) + '</select></label>' +
+      '<label>' + L('Thị trường', 'Market') + '<select data-f="mkt">' + Spd.opts(D.markets.map(function (m) { return [m.id, m.name]; }), F.mkt) + '</select></label>' +
+      '<label>' + L('Khách hàng', 'Customer') + '<select data-f="cus">' + Spd.opts(D.customers.map(function (c) { return [c.id, c.name]; }), F.cus) + '</select></label>' +
+      '<label>' + L('Loại khách hàng', 'Customer type') + '<select data-f="ctype">' + Spd.opts((App.boot.config.lists['Customer type'] || []).map(function (x) { return [x, x]; }), F.ctype) + '</select></label>' +
+      '<label>' + L('Giai đoạn', 'Stage') + '<select data-f="stg">' + Spd.opts([[D.stage.bid, D.stage.bid], [D.stage.job, D.stage.job]], F.stg) + '</select></label>' +
+      '<label>' + L('Từ quý (ngày báo giá)', 'From quarter (quote date)') + '<select data-f="from">' + Spd.opts(qs.map(function (x) { return [x, x]; }), F.from, '—') + '</select></label>' +
+      '<label>' + L('Đến quý', 'To quarter') + '<select data-f="to">' + Spd.opts(qs.map(function (x) { return [x, x]; }), F.to, '—') + '</select></label>' +
+      '</div></div>' +
+      (units.length > 1 ? '<div class="spd-warnbox"><b>' + L('Đang trộn nhiều đơn vị', 'Mixing several units') + ' (' + Fmt.esc(units.join(', ')) + ')</b> — ' +
+        L('giá trung bình chỉ có nghĩa khi chọn 1 hạng mục hoặc nhóm cùng đơn vị.', 'averages are meaningful only for one item or a group with the same unit.') + '</div>' : '') +
+      UI.kpis([
+        { label: L('Dòng giá khớp', 'Matching price rows'), value: L1.length, sub: Object.keys(nPrj).length + L(' dự án', ' projects') },
+        { label: L('Giá bán TB / ĐV (', 'Avg selling price / unit (') + cn + ')', value: Spd.money(Spd.avg(L1.map(function (l) { return l.sellB; })), Spd.avg(L1.map(function (l) { return l.sellU; }))), sub: units.length === 1 ? '/ ' + Fmt.esc(units[0]) : '' },
+        { label: L('Thấp nhất – cao nhất', 'Min – max'), value: sel.length ? Spd.num(Math.min.apply(null, sel)) + ' – ' + Spd.num(Math.max.apply(null, sel)) : '—', sub: cn },
+        { label: L('Giá vốn TB / ĐV', 'Avg unit cost'), value: Spd.money(Spd.avg(L1.map(function (l) { return l.costB; })), Spd.avg(L1.map(function (l) { return l.costU; }))), sub: L('trước cước vận chuyển', 'before freight') },
+        { label: L('GM% trung bình', 'Avg GM%'), value: Spd.pct(Spd.avg(L1.map(function (l) { return l.gmp; }))), sub: L('TB đơn giản theo dòng', 'simple average of rows') }
+      ]) +
+      '<div class="card"><h3>' + L('Giá bán theo thời gian', 'Selling price over time') + '</h3><div class="muted small">' + L('Mỗi chấm là 1 dòng hạng mục, theo ngày báo giá của dự án.', 'Each dot is one item row, by the project quotation date.') + '</div>' + me.chart(L1) + '</div>' +
+      '<div class="card"><h3>' + L('Dòng nguồn (', 'Source rows (') + L1.length + ')</h3><div class="muted small" style="margin-bottom:8px">' + L('Bấm 1 dòng để mở Dự án 360°.', 'Click a row to open Project 360°.') + '</div><div id="lk"></div>' +
+      Spd.how([
+        L('Nguồn: <code>Project_Items</code> + <code>Projects</code> (khách hàng, thị trường, ngày báo giá), <code>Customers.customer_type</code>, <code>Items.material_group</code>.', 'Source: <code>Project_Items</code> + <code>Projects</code> (customer, market, quote date), <code>Customers.customer_type</code>, <code>Items.material_group</code>.'),
+        L('Giá ', 'Price in ') + Fmt.esc(D.base) + L(' = <code>unit_sell × fx_sell</code> (tỷ giá loại tiền bán, dòng FX_Rates mới nhất ≤ <code>fx_date</code> của dự án).', ' = <code>unit_sell × fx_sell</code> (selling-currency rate, latest FX_Rates row on or before the project <code>fx_date</code>).'),
+        L('Giá USD = giá ', 'USD price = price in ') + Fmt.esc(D.base) + L(' ÷ tỷ giá USD cùng <code>fx_date</code> (<code>unit_sell_usd</code>) → dự án bán USD hiện đúng giá đã chào.', ' ÷ USD rate on the same <code>fx_date</code> (<code>unit_sell_usd</code>) → a project sold in USD shows its quoted USD price.'),
+        L('TB / min / max = trung bình đơn giản các dòng khớp (không trọng số, file không lưu khối lượng) — giống <code>Sum_Item</code>.', 'Avg / min / max = simple average of matching rows (unweighted, no quantities stored) — as in <code>Sum_Item</code>.'),
+        L('GM% = (giá bán − giá vốn) ÷ giá bán theo từng dòng, trước cước; như nhau dù xem VND hay USD.', 'GM% = (selling price − unit cost) ÷ selling price per row, before freight; identical in VND or USD.')
+      ]) + '</div></div>';
+    var rows = L1.slice().sort(function (a, b) { return a.qd < b.qd ? 1 : a.qd > b.qd ? -1 : 0; });
+    view.querySelector('#lk').innerHTML = UI.table([
+      { key: 'prj', label: L('Dự án', 'Project'), render: function (l) { return Spd.prj(l.prj); } },
+      { key: 'cus', label: L('Khách hàng', 'Customer'), render: function (l) { return Fmt.esc((Spd.C[l.cus] || {}).name || l.cus); } },
+      { key: 'mkt', label: L('Thị trường', 'Market'), render: function (l) { return Fmt.esc((Spd.M[l.mkt] || {}).name || l.mkt); } },
+      { key: 'qd', label: L('Ngày báo giá', 'Quote date'), render: function (l) { return Fmt.date(l.qd); } },
+      { key: 'stg', label: L('GĐ', 'Stage'), render: function (l) { return Spd.stage(l.stg); } },
+      { key: 'name', label: L('Hạng mục', 'Item') },
+      { key: 'unit', label: L('ĐV', 'Unit') },
+      { key: 'sell', label: L('Giá bán (tiền gốc)', 'Price (original)'), num: true, render: function (l) { return Spd.raw(l.sell) + ' ' + Fmt.esc((Spd.P[l.prj] || {}).sc || ''); } },
+      { key: 'sellB', label: L('Giá bán (', 'Price (') + cn + ')', num: true, render: function (l) { return Spd.money(l.sellB, l.sellU); } },
+      { key: 'costB', label: L('Giá vốn (', 'Cost (') + cn + ')', num: true, render: function (l) { return Spd.money(l.costB, l.costU); } },
+      { key: 'gmp', label: 'GM%', num: true, render: function (l) { return Spd.pct(l.gmp); } }
+    ], rows, { empty: L('Không có dòng nào khớp bộ lọc.', 'No rows match the filters.'), onRow: function (l) { Spd.go360(l.prj); } });
+    var root = view.querySelector('#spd');
+    root.querySelectorAll('[data-f]').forEach(function (s) { s.onchange = function () { F[s.dataset.f] = s.value; me.draw(view, D); }; });
+    Spd.bindCur(root, function () { me.draw(view, D); });
+  },
+  chart: function (L1) {
+    var pts = L1.map(function (l) { return { x: l.qd, y: Spd.v(l.sellB, l.sellU), s: l.stg }; }).filter(function (p) { return p.y !== null && p.x; });
+    if (pts.length < 2) return '<div class="empty">' + L('Chưa đủ dữ liệu để vẽ.', 'Not enough data to draw.') + '</div>';
+    var W = 760, H = 220, pl = 64, pr = 14, pt = 10, pb = 26;
+    var xs = pts.map(function (p) { return Date.parse(p.x); }), ys = pts.map(function (p) { return p.y; });
+    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), y1 = Math.max.apply(null, ys) * 1.1 || 1;
+    if (x1 === x0) { x0 -= 864e5 * 15; x1 += 864e5 * 15; }
+    var X = function (t) { return pl + (t - x0) / (x1 - x0) * (W - pl - pr); }, Y = function (v) { return pt + (1 - v / y1) * (H - pt - pb); };
+    var ticks = [0, 0.25, 0.5, 0.75, 1].map(function (f) { return f * y1; });
+    var lab = []; var d0 = new Date(x0);
+    for (var y = d0.getFullYear(); y <= new Date(x1).getFullYear(); y++) [0, 3, 6, 9].forEach(function (m) { var t = Date.UTC(y, m, 1); if (t >= x0 && t <= x1) lab.push(t); });
+    if (lab.length > 8) lab = lab.filter(function (_, i) { return i % 2 === 0; });
+    var job = Spd.D.stage.job;
+    return '<div class="table-wrap spd-chart" style="border:0"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img">' +
+      ticks.map(function (t) { return '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + Y(t).toFixed(1) + '" y2="' + Y(t).toFixed(1) + '"/><text x="' + (pl - 6) + '" y="' + (Y(t) + 4).toFixed(1) + '" text-anchor="end">' + Spd.num(t, y1 < 10 ? 2 : 0) + '</text>'; }).join('') +
+      lab.map(function (t) { return '<text x="' + X(t).toFixed(1) + '" y="' + (H - 8) + '" text-anchor="middle">' + new Date(t).toISOString().slice(0, 7) + '</text>'; }).join('') +
+      pts.map(function (p) { return '<circle cx="' + X(Date.parse(p.x)).toFixed(1) + '" cy="' + Y(p.y).toFixed(1) + '" r="4" fill="' + (p.s === job ? 'var(--blue)' : 'var(--orange)') + '" fill-opacity=".75"/>'; }).join('') +
+      '</svg></div><div class="spd-legend"><span><i style="background:var(--orange)"></i>' + Fmt.esc(Spd.D.stage.bid) + '</span><span><i style="background:var(--blue)"></i>' + Fmt.esc(job) + '</span></div>';
+  }
+};
+
+/* ================================== Tổng hợp ================================== */
+App.pages.price_summary = {
+  title: function () { return L('Tổng hợp', 'Summaries'); },
+  render: function (view) { return Spd.load().then(function (D) { App.pages.price_summary.draw(view, D); }); },
+  draw: function (view, D) {
+    var S = Spd.sum, me = App.pages.price_summary, cn = Spd.curName(), body = '', how = [];
+    var seg = '<div class="seg" role="group">' + [['cus', L('Khách hàng', 'Customer')], ['mkt', L('Thị trường', 'Market')], ['item', L('Hạng mục', 'Item')],
+      ['grpm', L('Nhóm VT × thị trường', 'Group × market')], ['grpc', L('Nhóm VT × khách hàng', 'Group × customer')]].map(function (x) {
+      return '<button type="button" data-s="' + x[0] + '" class="' + (S.by === x[0] ? 'on' : '') + '">' + x[1] + '</button>'; }).join('') + '</div>';
+    var stgSel = '<div class="spd-filters" style="margin-bottom:10px"><label>' + L('Giai đoạn', 'Stage') + '<select data-stg>' +
+      Spd.opts([[D.stage.bid, D.stage.bid], [D.stage.job, D.stage.job]], S.stg) + '</select></label></div>';
+    var pt = function (d) { return d === null ? '—' : '<span class="' + (d >= 0 ? 'pos' : 'neg') + '">' + (d >= 0 ? '+' : '') + (d * 100).toFixed(1) + L(' điểm', ' pts') + '</span>'; };
+    if (S.by === 'cus' || S.by === 'mkt') {
+      var key = S.by, list = S.by === 'cus' ? D.customers : D.markets;
+      var rows = list.map(function (x) {
+        var P = D.projects.filter(function (p) { return p[key] === x.id; }), Ls = D.lines.filter(function (l) { return l[key] === x.id; });
+        var b = Ls.filter(function (l) { return l.stg === D.stage.bid; }), j = Ls.filter(function (l) { return l.stg === D.stage.job; });
+        var gb = Spd.avg(b.map(function (l) { return l.gmp; })), gj = Spd.avg(j.map(function (l) { return l.gmp; }));
+        var won = P.filter(function (p) { return Spd.won(p.st); }).length, lost = P.filter(function (p) { return p.st === 'Lost'; }).length;
+        return { id: x.id, name: x.name, n: P.length, won: won, lost: lost, rate: won + lost ? won / (won + lost) : null, b: b.length, gb: gb, j: j.length, gj: gj,
+          d: gb !== null && gj !== null ? gj - gb : null, fr: D.freight.filter(function (f) { return P.some(function (p) { return p.id === f.prj; }); }).length };
+      }).filter(function (r) { return r.n; });
+      body = UI.table([
+        { key: 'id', label: L('Mã', 'ID'), render: function (r) { return '<span class="id">' + Fmt.esc(r.id) + '</span>'; } }, { key: 'name', label: L('Tên', 'Name') },
+        { key: 'n', label: L('Dự án', 'Projects'), num: true }, { key: 'won', label: 'Won/Completed', num: true }, { key: 'lost', label: 'Lost', num: true },
+        { key: 'rate', label: L('Tỷ lệ thắng', 'Win rate'), num: true, render: function (r) { return r.rate === null ? '—' : Fmt.pct(r.rate, 0); } },
+        { key: 'b', label: L('Dòng ', 'Rows ') + D.stage.bid, num: true }, { key: 'gb', label: 'GM% ' + D.stage.bid, num: true, render: function (r) { return Spd.pct(r.gb); } },
+        { key: 'j', label: L('Dòng ', 'Rows ') + D.stage.job, num: true }, { key: 'gj', label: 'GM% ' + D.stage.job, num: true, render: function (r) { return Spd.pct(r.gj); } },
+        { key: 'd', label: L('Chênh GM (Job − Bid)', 'GM change (job − bid)'), num: true, render: function (r) { return pt(r.d); } },
+        { key: 'fr', label: L('Dòng cước', 'Freight rows'), num: true }
+      ], rows, { empty: L('Chưa có dự án', 'No projects yet') });
+      how = [L('Như <code>Sum_', 'As in <code>Sum_') + (S.by === 'cus' ? 'Customer' : 'Market') + L('</code>, thêm Won/Lost và tỷ lệ thắng = (Won + Completed) ÷ (Won + Completed + Lost); Quoting không tính.', '</code>, plus Won/Lost and win rate = (Won + Completed) ÷ (Won + Completed + Lost); Quoting is excluded.'),
+        L('GM% = trung bình đơn giản GM% các dòng hạng mục theo giai đoạn; chênh lệch tính bằng điểm %.', 'GM% = simple average of item-row GM% per stage; change in percentage points.')];
+    } else if (S.by === 'item') {
+      var r2 = D.items.map(function (it) {
+        var Ls = D.lines.filter(function (l) { return l.item === it.id && (!S.stg || l.stg === S.stg); });
+        var s = Ls.map(function (l) { return Spd.v(l.sellB, l.sellU); }).filter(function (x) { return x !== null; });
+        var as = Spd.avg(s), ac = Spd.avg(Ls.map(function (l) { return Spd.v(l.costB, l.costU); }));
+        return { id: it.id, name: it.name, unit: it.unit, n: Ls.length, as: as, mn: s.length ? Math.min.apply(null, s) : null, mx: s.length ? Math.max.apply(null, s) : null,
+          ac: ac, gm: as !== null && ac !== null ? as - ac : null, gp: as && ac !== null ? (as - ac) / as : null };
+      }).filter(function (r) { return r.n; });
+      body = stgSel + UI.table([
+        { key: 'id', label: L('Mã', 'ID'), render: function (r) { return '<span class="id">' + Fmt.esc(r.id) + '</span>'; } }, { key: 'name', label: L('Hạng mục', 'Item') }, { key: 'unit', label: L('ĐV', 'Unit') },
+        { key: 'n', label: L('Dòng', 'Rows'), num: true },
+        { key: 'as', label: L('Giá bán TB (', 'Avg price (') + cn + ')', num: true, render: function (r) { return Spd.num(r.as); } },
+        { key: 'mn', label: 'Min', num: true, render: function (r) { return Spd.num(r.mn); } }, { key: 'mx', label: 'Max', num: true, render: function (r) { return Spd.num(r.mx); } },
+        { key: 'ac', label: L('Giá vốn TB', 'Avg cost'), num: true, render: function (r) { return Spd.num(r.ac); } },
+        { key: 'gm', label: L('GM TB / ĐV', 'Avg GM / unit'), num: true, render: function (r) { return Spd.num(r.gm); } },
+        { key: 'gp', label: 'GM%', num: true, render: function (r) { return Spd.pct(r.gp); } }
+      ], r2, { empty: L('Chưa có dữ liệu', 'No data yet') });
+      how = [L('Như <code>Sum_Item</code>: TB đơn giản theo dòng; GM% = (giá bán TB − giá vốn TB) ÷ giá bán TB.', 'As in <code>Sum_Item</code>: simple averages; GM% = (avg price − avg cost) ÷ avg price.'),
+        L('Khác sheet: VND / USD lấy từ cột của từng dòng (tỷ giá đúng ngày dự án), không quy đổi lại bằng 1 tỷ giá chung.', 'Unlike the sheet: VND / USD come from each row (rate on the project date), not one shared display rate.')];
+    } else {
+      var dim = S.by === 'grpm' ? 'mkt' : 'cus', dl = S.by === 'grpm' ? D.markets : D.customers;
+      var groups = []; D.items.concat(D.materials).forEach(function (x) { if (x.grp && groups.indexOf(x.grp) < 0) groups.push(x.grp); });
+      var inputs = S.stg === D.stage.job ? D.inj : S.stg === D.stage.bid ? D.inb : D.inb.concat(D.inj);
+      var r3 = [];
+      dl.forEach(function (m) {
+        groups.forEach(function (g) {
+          var Ls = D.lines.filter(function (l) { return l[dim] === m.id && l.grp === g && (!S.stg || l.stg === S.stg); });
+          var In = inputs.filter(function (x) { return x[dim] === m.id && x.grp === g; });
+          if (!Ls.length && !In.length) return;
+          var as = Spd.avg(Ls.map(function (l) { return Spd.v(l.sellB, l.sellU); })), ac = Spd.avg(Ls.map(function (l) { return Spd.v(l.costB, l.costU); }));
+          var u1 = [], u2 = [];
+          Ls.forEach(function (l) { if (u1.indexOf(l.unit) < 0) u1.push(l.unit); }); In.forEach(function (x) { if (u2.indexOf(x.unit) < 0) u2.push(x.unit); });
+          r3.push({ dim: m.name, g: g, as: as, ai: Spd.avg(In.map(function (x) { return Spd.v(x.base, x.usd); })), gp: as && ac !== null ? (as - ac) / as : null, u1: u1.join(','), u2: u2.join(',') });
+        });
+      });
+      body = stgSel + UI.table([
+        { key: 'dim', label: dim === 'mkt' ? L('Thị trường', 'Market') : L('Khách hàng', 'Customer') }, { key: 'g', label: L('Nhóm vật tư', 'Material group') },
+        { key: 'as', label: L('Giá bán TB (', 'Avg selling price (') + cn + ')', num: true, render: function (r) { return r.as === null ? '—' : Spd.num(r.as) + ' /' + Fmt.esc(r.u1); } },
+        { key: 'ai', label: L('Giá đầu vào TB (', 'Avg input price (') + cn + ')', num: true, render: function (r) { return r.ai === null ? '—' : Spd.num(r.ai) + ' /' + Fmt.esc(r.u2); } },
+        { key: 'gp', label: 'GM%', num: true, render: function (r) { return Spd.pct(r.gp); } },
+        { key: 'u', label: L('Cùng đơn vị?', 'Same unit?'), render: function (r) { return !r.u1 || !r.u2 ? '—' : r.u1 === r.u2 ? UI.badge(L('Có', 'Yes'), 'ok') : UI.badge(L('Khác', 'Differs'), 'warn'); } }
+      ], r3, { empty: L('Chưa có dữ liệu', 'No data yet') });
+      how = [L('Như <code>Sum_MatGroup_', 'As in <code>Sum_MatGroup_') + (dim === 'mkt' ? 'Market' : 'Customer') + L('</code> nhưng dạng bảng dọc (1 dòng / ', '</code> but as a long table (one row per ') + (dim === 'mkt' ? L('thị trường', 'market') : L('khách hàng', 'customer')) + L(' × nhóm).', ' × group).'),
+        L('Giá bán từ <code>Project_Items</code> (hạng mục thuộc nhóm), giá đầu vào từ <code>Project_Inputs_Bid</code> / <code>Job</code> theo giai đoạn; chỉ so được khi cùng đơn vị.', 'Selling price from <code>Project_Items</code> (items in the group), input price from <code>Project_Inputs_Bid</code> / <code>Job</code> by stage; comparable only with the same unit.'),
+        L('GM% = (giá bán TB − giá vốn TB) ÷ giá bán TB, trước cước.', 'GM% = (avg price − avg cost) ÷ avg price, before freight.')];
+    }
+    view.innerHTML = '<div id="spd"><div class="page-head"><div class="title"><h2>' + L('Tổng hợp', 'Summaries') + '</h2><div class="muted small">' +
+      L('Thay các sheet Sum_* · tiền tệ ', 'Replaces the Sum_* sheets · currency ') + Fmt.esc(cn) + '</div></div>' + Spd.curSeg() + '</div>' +
+      '<div class="spd-head">' + seg + '</div><div class="card">' + body + Spd.how(how) + '</div></div>';
+    var root = view.querySelector('#spd');
+    root.querySelectorAll('[data-s]').forEach(function (b) { b.onclick = function () { S.by = b.dataset.s; me.draw(view, D); }; });
+    var st = root.querySelector('[data-stg]'); if (st) st.onchange = function () { S.stg = st.value; me.draw(view, D); };
+    Spd.bindCur(root, function () { me.draw(view, D); });
+  }
+};
+
+/* ================================== Bid vs Job ================================== */
+App.pages.bid_job = {
+  title: function () { return 'Bid vs Job'; },
+  render: function (view) { return Spd.load().then(function (D) { App.pages.bid_job.draw(view, D); }); },
+  draw: function (view, D) {
+    var me = App.pages.bid_job, cn = Spd.curName();
+    var P = D.projects.filter(function (p) { return p.gmBid !== null && p.gmJob !== null; });
+    var all = D.inb.concat(D.inj);
+    view.innerHTML = '<div id="spd"><div class="page-head"><div class="title"><h2>Bid vs Job</h2><div class="muted small">' +
+      L('GM% và giá vật tư thực tế so với lúc chào giá', 'GM% and actual material prices against the bid') + '</div></div>' + Spd.curSeg() + '</div>' +
+      UI.kpis([
+        { label: L('Dự án có cả Bid và Job', 'Projects with bid and job'), value: P.length },
+        { label: 'GM% ' + D.stage.bid + L(' TB', ' avg'), value: Spd.pct(Spd.avg(P.map(function (p) { return p.gmBid; }))) },
+        { label: 'GM% ' + D.stage.job + L(' TB', ' avg'), value: Spd.pct(Spd.avg(P.map(function (p) { return p.gmJob; }))) },
+        { label: L('Vật tư Job đắt hơn Bid', 'Job inputs above bid'), value: D.inj.filter(function (x) { return x.vBid > 0; }).length + ' / ' + D.inj.filter(function (x) { return x.vBid !== null; }).length },
+        { label: L('Dòng lệch quy cách', 'Spec mismatches'), value: all.filter(function (x) { return x.check === 'Spec differs'; }).length, tone: all.some(function (x) { return x.check === 'Spec differs'; }) ? 'danger' : '' }
+      ]) +
+      '<div class="card"><h3>' + L('GM% theo dự án', 'GM% by project') + '</h3><div class="muted small" style="margin-bottom:8px">' + L('Bấm dòng để mở Dự án 360°.', 'Click a row to open Project 360°.') + '</div><div id="b1"></div></div>' +
+      '<div class="card"><h3>' + L('Giá vật tư thực tế so với Bid và bảng giá', 'Actual material prices vs bid and price list') + '</h3><div class="muted small" style="margin-bottom:8px">' +
+      L('Mỗi dòng Vật tư đầu vào - Job; ghép Bid theo dự án + vật tư + quy cách (phải viết giống hệt).', 'Each job input row; matched to bid by project + material + specification (must be written identically).') + '</div><div id="b2"></div>' +
+      Spd.how([
+        L('GM% Bid / Job = trung bình đơn giản GM% các dòng hạng mục theo giai đoạn (<code>gm_pct_bid</code> / <code>gm_pct_job</code>).', 'Bid / job GM% = simple average of item-row GM% per stage (<code>gm_pct_bid</code> / <code>gm_pct_job</code>).'),
+        L('So Bid = giá thực tế ÷ giá Bid TB cùng dự án + vật tư + quy cách − 1 (<code>var_vs_bid_pct</code>).', 'Vs bid = actual price ÷ avg bid price of the same project + material + spec − 1 (<code>var_vs_bid_pct</code>).'),
+        L('So bảng giá = giá thực tế ÷ giá dòng Material_Prices tham chiếu − 1 (<code>var_vs_list_pct</code>); tính trên VND nên như nhau khi xem USD.', 'Vs price list = actual price ÷ reference Material_Prices row − 1 (<code>var_vs_list_pct</code>); computed in VND so identical in USD.'),
+        L('Kiểm tra quy cách: quy cách áp dụng ≠ quy cách dòng giá tham chiếu → "Spec differs".', 'Spec check: applied spec ≠ spec of the reference price row → "Spec differs".')
+      ]) + '</div></div>';
+    view.querySelector('#b1').innerHTML = UI.table([
+      { key: 'id', label: L('Dự án', 'Project'), render: function (p) { return Spd.prj(p.id); } },
+      { key: 'job', label: L('Số Job', 'Job No.'), render: function (p) { return Fmt.esc(p.job || '—'); } },
+      { key: 'st', label: L('Trạng thái', 'Status'), render: function (p) { return UI.status(p.st); } },
+      { key: 'gmBid', label: 'GM% ' + D.stage.bid, num: true, render: function (p) { return Spd.pct(p.gmBid); } },
+      { key: 'gmJob', label: 'GM% ' + D.stage.job, num: true, render: function (p) { return Spd.pct(p.gmJob); } },
+      { key: 'd', label: L('Chênh (điểm %)', 'Change (pts)'), num: true, render: function (p) { var d = p.gmJob - p.gmBid; return '<span class="' + (d >= 0 ? 'pos' : 'neg') + '">' + (d >= 0 ? '+' : '') + (d * 100).toFixed(1) + '</span>'; } }
+    ], P, { empty: L('Chưa có dự án nào có cả dòng Bid và Job', 'No project has both bid and job rows yet'), onRow: function (p) { Spd.go360(p.id); } });
+    view.querySelector('#b2').innerHTML = UI.table([
+      { key: 'prj', label: L('Dự án', 'Project'), render: function (x) { return '<span class="id">' + Fmt.esc(x.prj) + '</span>'; } },
+      { key: 'name', label: L('Vật tư', 'Material') }, { key: 'spec', label: L('Quy cách', 'Spec') }, { key: 'unit', label: L('ĐV', 'Unit') },
+      { key: 'bidB', label: 'Bid (' + cn + ')', num: true, render: function (x) { return Spd.money(x.bidB, x.bidU); } },
+      { key: 'base', label: L('Thực tế (', 'Actual (') + cn + ')', num: true, render: function (x) { return Spd.money(x.base, x.usd); } },
+      { key: 'vBid', label: L('So Bid', 'Vs bid'), num: true, render: function (x) { return Spd.sgn(x.vBid); } },
+      { key: 'vList', label: L('So bảng giá', 'Vs price list'), num: true, render: function (x) { return Spd.sgn(x.vList); } },
+      { key: 'check', label: L('Kiểm tra quy cách', 'Spec check'), render: function (x) { return Spd.check(x.check); } }
+    ], D.inj, { empty: L('Chưa có dòng vật tư Job', 'No job input rows yet'), onRow: function (x) { Spd.go360(x.prj); } });
+    Spd.bindCur(view.querySelector('#spd'), function () { me.draw(view, D); });
+  }
+};
+
+/* ================================== Dự án 360° ================================== */
+App.pages.entity.custom360.Projects = function (view, d, p) {
+  return App.api('spd.project', { id: d.record.project_id }).then(function (x) { App.pages.entity.spdProject(view, d, x, p.tab || 'items'); })
+    .catch(function (e) { App.renderError(view, e); });
+};
+App.pages.entity.spdProject = function (view, d, x, tab) {
+  var rec = d.record, id = rec.project_id, pr = x.project || {}, cn = Spd.curName(), canW = App.canWrite('Projects');
+  var won = Spd.won(rec.status), job = x.stage.job;
+  var toI = x.lines.filter(function (l) { return l.stg === x.stage.bid && !x.lines.some(function (j) { return j.stg === job && j.item === l.item; }); });
+  var nI = {}; toI.forEach(function (l) { nI[l.item] = 1; });
+  var toB = x.inb.filter(function (b) { return !x.inj.some(function (j) { return j.mat === b.mat && j.spec === b.spec; }); });
+  var nB = {}; toB.forEach(function (b) { nB[b.mat + '|' + b.spec] = 1; });
+  var nItems = Object.keys(nI).length, nIn = Object.keys(nB).length;
+  var redraw = function (t) {
+    Promise.all([App.api('entity.get360', { table: 'Projects', id: id }), App.api('spd.project', { id: id })]).then(function (r) {
+      App.pages.entity.spdProject(view, r[0], r[1], t || tab);
+    }).catch(App.fail);
+  };
+  var copyBtn = App.can('write') ? '<button class="btn primary" id="copy"' + (won && (nItems || nIn) ? '' : ' disabled') + ' title="' +
+    Fmt.esc(won ? L('Chép dòng Bid chưa có Job sang Job', 'Copy bid rows that have no job row yet') : L('Chỉ dùng khi dự án Won / Completed', 'Only when the project is Won / Completed')) + '">' +
+    L('Chép Bid → Job (', 'Copy bid → job (') + nItems + L(' hạng mục, ', ' items, ') + nIn + L(' vật tư)', ' inputs)') + '</button>' : '';
+  var meta = [App.label('Customers', rec.customer_id) || rec.customer_id, App.label('Markets', rec.market_id) || rec.market_id,
+    L('Báo giá ', 'Quoted ') + (Fmt.date(rec.quote_date) || '—'), L('Ký HĐ ', 'Contract ') + (Fmt.date(rec.contract_date) || '—'),
+    L('Bán ', 'Sell ') + (rec.sell_currency || '—') + ' / ' + L('Vốn ', 'Cost ') + (rec.cost_currency || '—'), L('Ngày tỷ giá ', 'FX date ') + (Fmt.date(rec.fx_date) || '—')];
+  var fxs = function (v) { return v === null || v === undefined ? '<span class="neg">' + L('thiếu', 'missing') + '</span>' : Spd.raw(v); };
+  view.innerHTML = '<div id="spd"><div class="page-head"><div class="title"><div class="crumb"><a id="back">' + Fmt.esc(App.tlabel('Projects')) + '</a> › <span class="id">' + Fmt.esc(id) + '</span>' +
+    (rec.job_no ? ' · Job ' + Fmt.esc(rec.job_no) : '') + '</div><h2>' + Fmt.esc(rec.project_name || id) + ' ' + UI.status(rec.status) + UI.missingBadge('Projects', rec) + '</h2>' +
+    '<div class="muted small">' + meta.map(Fmt.esc).join(' · ') + '</div></div>' +
+    '<button class="btn" id="edit">' + (canW ? '✎ ' + L('Sửa', 'Edit') : L('Xem chi tiết', 'View details')) + '</button>' + copyBtn + Spd.curSeg() + '</div>' +
+    UI.kpis([
+      { label: L('Tỷ giá bán / vốn / USD', 'FX sell / cost / USD'), html: '<span style="font-size:15px">' + fxs(pr.fxs) + ' / ' + fxs(pr.fxc) + ' / ' + fxs(pr.fxu) + '</span>', sub: Spd.check(pr.check === 'OK' ? 'OK' : pr.check) },
+      { label: 'GM% ' + x.stage.bid, value: Spd.pct(pr.gmBid) }, { label: 'GM% ' + job, value: Spd.pct(pr.gmJob) },
+      { label: L('Dòng hạng mục / cước', 'Item / freight rows'), value: (pr.rows || 0) + ' / ' + (pr.fr || 0) }
+    ]) + '<div class="card" id="tabs"></div></div>';
+  var root = view.querySelector('#spd');
+  view.querySelector('#back').onclick = function () { App.go('entity', { table: 'Projects' }); };
+  view.querySelector('#edit').onclick = function () { App.edit('Projects', rec, { onSaved: function () { redraw(); }, onDeleted: function () { App.go('entity', { table: 'Projects' }); } }); };
+  Spd.bindCur(root, function () { App.pages.entity.spdProject(view, d, x, UI.tabs._last || tab); });
+  var cb = view.querySelector('#copy');
+  if (cb) cb.onclick = function () {
+    UI.confirm(L('Chép ', 'Copy ') + nItems + L(' dòng hạng mục và ', ' item rows and ') + nIn + L(' dòng vật tư Bid sang Job? Dòng vật tư Job để trống Ngày giá thực tế (cờ Thiếu dữ liệu tới khi nhập).', ' bid input rows to job? Job input rows leave the actual price date blank (flagged Incomplete until entered).')).then(function (yes) {
+      if (!yes) return;
+      cb.disabled = true;
+      App.api('spd.copyToJob', { id: id }).then(function (r) {
+        UI.toast(L('Đã chép ', 'Copied ') + r.items.length + L(' hạng mục, ', ' items, ') + r.inputs.length + L(' vật tư sang Job.', ' inputs to job.'), 'ok', 6000);
+        App.refreshAlerts(); redraw('items');
+      }).catch(function (e) { cb.disabled = false; App.fail(e); });
+    });
+  };
+  var child = function (table) { return (d.children.filter(function (c) { return c.table === table; })[0] || { rows: [] }).rows; };
+  var rawBy = function (table, pk) { var o = {}; child(table).forEach(function (r) { o[r[pk]] = r; }); return o; };
+  var addBtn = function (table) { return App.canWrite(table) ? '<button class="btn sm primary" data-add="' + table + '">+ ' + Fmt.esc(App.tlabel(table)) + '</button>' : ''; };
+  var bind = function (el, table, pk, list) {
+    var raw = rawBy(table, pk), ctx = { project_id: id };
+    var a = el.querySelector('[data-add]');
+    if (a) a.onclick = function () { App.edit(table, {}, { defaults: { project_id: id }, context: ctx, onSaved: function () { redraw(UI.tabs._last); } }); };
+    return function (row) { App.edit(table, raw[row.id] || {}, { context: ctx, onSaved: function () { redraw(UI.tabs._last); }, onDeleted: function () { redraw(UI.tabs._last); } }); };
+  };
+  var tabs = [
+    { id: 'items', label: L('Hạng mục', 'Items'), count: x.lines.length, render: function (el) {
+      var rows = x.lines.slice().sort(function (a, b) { return (a.item + a.stg).localeCompare(b.item + b.stg); });
+      el.innerHTML = '<div class="card-head"><h3>' + Fmt.esc(App.tlabel('Project_Items')) + '</h3>' + addBtn('Project_Items') + '</div>';
+      var open = bind(el, 'Project_Items', 'line_id');
+      el.insertAdjacentHTML('beforeend', UI.table([
+        { key: 'id', label: L('Mã dòng', 'Row'), render: function (l) { return '<span class="id">' + Fmt.esc(l.id) + '</span>'; } },
+        { key: 'stg', label: L('GĐ', 'Stage'), render: function (l) { return Spd.stage(l.stg); } },
+        { key: 'name', label: L('Hạng mục', 'Item'), render: function (l) { return Fmt.esc(l.name || l.item); } }, { key: 'unit', label: L('ĐV', 'Unit') },
+        { key: 'c', label: L('VT / GC / LD / Khác (', 'Mat / Fab / Erect / Other (') + (rec.cost_currency || '') + ')', num: true, render: function (l) { return [l.cm, l.cf, l.ce, l.co].map(Spd.raw).join(' / '); } },
+        { key: 'costB', label: L('Giá vốn (', 'Cost (') + cn + ')', num: true, render: function (l) { return Spd.money(l.costB, l.costU); } },
+        { key: 'sell', label: L('Giá bán (', 'Price (') + (rec.sell_currency || '') + ')', num: true, render: function (l) { return Spd.raw(l.sell); } },
+        { key: 'sellB', label: L('Giá bán (', 'Price (') + cn + ')', num: true, render: function (l) { return Spd.money(l.sellB, l.sellU); } },
+        { key: 'gmp', label: 'GM%', num: true, render: function (l) { return Spd.pct(l.gmp); } }
+      ], rows, { empty: L('Chưa có dòng hạng mục', 'No item rows yet'), onRow: open }));
+    } },
+    { id: 'freight', label: L('Cước', 'Freight'), count: x.freight.length, render: function (el) {
+      el.innerHTML = '<div class="card-head"><h3>' + Fmt.esc(App.tlabel('Project_Freight')) + '</h3>' + addBtn('Project_Freight') + '</div>';
+      var open = bind(el, 'Project_Freight', 'freight_id');
+      el.insertAdjacentHTML('beforeend', UI.table([
+        { key: 'id', label: L('Mã', 'ID'), render: function (f) { return '<span class="id">' + Fmt.esc(f.id) + '</span>'; } }, { key: 'inc', label: 'Incoterm' },
+        { key: 'port', label: L('Cảng đích', 'Port') }, { key: 'basis', label: L('Tính theo', 'Basis') },
+        { key: 'cost', label: L('Cước (tiền gốc)', 'Cost (original)'), num: true, render: function (f) { return Spd.raw(f.cost) + ' ' + Fmt.esc(f.cur || ''); } },
+        { key: 'base', label: L('Cước (', 'Cost (') + cn + ')', num: true, render: function (f) { return Spd.money(f.base, f.usd); } }
+      ], x.freight, { empty: L('Chưa có dòng cước', 'No freight rows yet'), onRow: open }));
+    } },
+    { id: 'inb', label: L('Vật tư ', 'Inputs ') + x.stage.bid, count: x.inb.length, render: function (el) {
+      el.innerHTML = '<div class="card-head"><h3>' + Fmt.esc(App.tlabel('Project_Inputs_Bid')) + '</h3>' + addBtn('Project_Inputs_Bid') + '</div>';
+      var open = bind(el, 'Project_Inputs_Bid', 'input_id');
+      el.insertAdjacentHTML('beforeend', UI.table([
+        { key: 'id', label: L('Mã', 'ID'), render: function (r) { return '<span class="id">' + Fmt.esc(r.id) + '</span>'; } },
+        { key: 'name', label: L('Vật tư', 'Material'), render: function (r) { return Fmt.esc(r.name || r.mat); } }, { key: 'spec', label: L('Quy cách', 'Spec') },
+        { key: 'base', label: 'Bid (' + cn + ')', num: true, render: function (r) { return Spd.money(r.base, r.usd); } },
+        { key: 'listB', label: L('Bảng giá (', 'Price list (') + cn + ')', num: true, render: function (r) { return Spd.money(r.listB, r.listU); } },
+        { key: 'vList', label: L('So bảng giá', 'Vs price list'), num: true, render: function (r) { return Spd.sgn(r.vList); } },
+        { key: 'check', label: L('Kiểm tra quy cách', 'Spec check'), render: function (r) { return Spd.check(r.check); } }
+      ], x.inb, { empty: L('Chưa có dòng vật tư Bid', 'No bid input rows yet'), onRow: open }));
+    } },
+    { id: 'inj', label: L('Vật tư ', 'Inputs ') + job, count: x.inj.length, render: function (el) {
+      el.innerHTML = '<div class="card-head"><h3>' + Fmt.esc(App.tlabel('Project_Inputs_Job')) + '</h3>' + addBtn('Project_Inputs_Job') + '</div>';
+      var open = bind(el, 'Project_Inputs_Job', 'input_id');
+      el.insertAdjacentHTML('beforeend', UI.table([
+        { key: 'id', label: L('Mã', 'ID'), render: function (r) { return '<span class="id">' + Fmt.esc(r.id) + '</span>'; } },
+        { key: 'name', label: L('Vật tư', 'Material'), render: function (r) { return Fmt.esc(r.name || r.mat); } }, { key: 'spec', label: L('Quy cách', 'Spec') },
+        { key: 'pd', label: L('Ngày giá', 'Price date'), render: function (r) { return r.pd ? Fmt.date(r.pd) : UI.badge(L('Thiếu dữ liệu', 'Incomplete'), 'warn'); } },
+        { key: 'base', label: L('Thực tế (', 'Actual (') + cn + ')', num: true, render: function (r) { return Spd.money(r.base, r.usd); } },
+        { key: 'vBid', label: L('So Bid', 'Vs bid'), num: true, render: function (r) { return Spd.sgn(r.vBid); } },
+        { key: 'vList', label: L('So bảng giá', 'Vs price list'), num: true, render: function (r) { return Spd.sgn(r.vList); } }
+      ], x.inj, { empty: L('Chưa có dòng vật tư Job', 'No job input rows yet'), onRow: open }));
+    } }
+  ];
+  if (App.can('activity')) tabs.push({ id: 'log', label: L('Nhật ký', 'Change log'), count: d.activity.length, render: function (el) { el.innerHTML = UI.activityList(d.activity); } });
+  UI.tabs(view.querySelector('#tabs'), tabs, tab);
+};
+
+/* ============================ Danh sách chọn (Config) ============================ */
+App.pages.lists = {
+  title: function () { return L('Danh sách chọn (Config)', 'Dropdown lists (Config)'); },
+  render: function (view) { return App.api('spd.lists').then(function (d) { App.pages.lists.draw(view, d); }); },
+  draw: function (view, d) {
+    var admin = App.can('catalog'), me = App.pages.lists;
+    view.innerHTML = '<div id="spd"><div class="page-head"><div class="title"><h2>' + L('Danh sách chọn', 'Dropdown lists') + '</h2><div class="muted small">' +
+      L('Sheet Config — giá trị dùng cho dropdown trong form và trong Sheet. ', 'Sheet Config — values used by dropdowns in forms and in the Sheet. ') +
+      (admin ? L('Chỉ xóa được giá trị chưa dùng.', 'Only unused values can be removed.') : L('Chỉ Admin được sửa.', 'Only Admin can edit.')) + '</div></div></div>' +
+      '<div class="card">' + UI.info([[L('Tiền tệ gốc (Config!B3)', 'Base currency (Config!B3)'), '<b>' + Fmt.esc(d.base) + '</b>'],
+        [L('Ghi chú', 'Note'), L('Mọi giá quy đổi về tiền gốc và USD. Không đổi tiền gốc khi đã có dữ liệu.', 'All prices convert to the base currency and to USD. Do not change it once data exists.')]]) + '</div>' +
+      '<div class="spd-lists">' + d.lists.map(function (l) {
+        return '<div class="card"><h3>' + Fmt.esc(l.name) + ' <span class="muted small">(' + l.values.length + '/' + l.max + ')</span></h3>' +
+          (l.fixed ? '<div class="muted small">' + L('Cố định: dòng 1 = bid, dòng 2 = job.', 'Fixed: row 1 = bid, row 2 = job.') + '</div>' : '') +
+          '<div class="spd-chips">' + l.values.map(function (v) {
+            return '<span class="spd-chip">' + Fmt.esc(v.v) + (v.used ? ' <span class="u">· ' + v.used + '</span>' : '') +
+              (admin && !l.fixed && !v.used ? '<button type="button" title="' + L('Xóa', 'Remove') + '" data-rm="' + Fmt.esc(l.name) + '" data-v="' + Fmt.esc(v.v) + '">×</button>' : '') + '</span>';
+          }).join('') + '</div>' +
+          (l.unknown.length ? '<div class="note warn small">' + L('Đang dùng nhưng không có trong danh sách: ', 'Used but not in the list: ') + Fmt.esc(l.unknown.join(', ')) + '</div>' : '') +
+          (admin && !l.fixed ? '<div class="spd-add"><input placeholder="' + L('Giá trị mới', 'New value') + '" data-in="' + Fmt.esc(l.name) + '"><button class="btn sm" data-addl="' + Fmt.esc(l.name) + '">' + L('Thêm', 'Add') + '</button></div>' : '') + '</div>';
+      }).join('') + '</div></div>';
+    var root = view.querySelector('#spd');
+    root.querySelectorAll('[data-addl]').forEach(function (b) {
+      var inp = root.querySelector('[data-in="' + b.dataset.addl + '"]');
+      var go = function () {
+        App.api('spd.listAdd', { list: b.dataset.addl, value: inp.value }).then(function (nd) { UI.toast(L('Đã thêm ', 'Added ') + inp.value, 'ok'); me.reboot(); me.draw(view, nd); }).catch(App.fail);
+      };
+      b.onclick = go;
+      inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
+    });
+    root.querySelectorAll('[data-rm]').forEach(function (b) {
+      b.onclick = function () {
+        UI.confirm(L('Xóa "', 'Remove "') + b.dataset.v + L('" khỏi ', '" from ') + b.dataset.rm + '?').then(function (yes) {
+          if (!yes) return;
+          App.api('spd.listRemove', { list: b.dataset.rm, value: b.dataset.v }).then(function (nd) { UI.toast(L('Đã xóa ', 'Removed ') + b.dataset.v, 'ok'); me.reboot(); me.draw(view, nd); }).catch(App.fail);
+        });
+      };
+    });
+  },
+  /** Cập nhật danh mục đang dùng trong form (bootstrap.config.lists). */
+  reboot: function () { App.api('app.bootstrap').then(function (b) { App.boot.config.lists = b.config.lists; }).catch(function () {}); }
+};
+
+/* ======================= Xem trước giá trị tính trong form ======================= */
+Spd.rate = function (cur, date) {
+  var D = Spd.D;
+  if (!D || !cur || !date) return null;
+  if (cur === D.base) return 1;
+  var hit = null, sum = 0;
+  D.fx.filter(function (r) { return r.c === cur && r.d && String(r.d).slice(0, 10) <= String(date).slice(0, 10); })
+    .sort(function (a, b) { return a.d < b.d ? 1 : -1; }).forEach(function (r) { if (hit === null) hit = r.d; if (r.d === hit) sum += r.r; });
+  return hit === null ? null : sum;
+};
+Spd.pv = function (el, parts) {
+  if (!Spd.D) { el.classList.remove('hidden'); el.innerHTML = L('Đang tải tỷ giá…', 'Loading FX rates…'); return; }
+  parts = parts.filter(Boolean);
+  el.classList.toggle('hidden', !parts.length);
+  el.innerHTML = '<div class="muted small" style="margin-bottom:2px">' + L('Xem trước (app tính, công thức Sheet vẫn là nguồn)', 'Preview (computed by the app; Sheet formulas remain the source)') + '</div><div class="pv">' +
+    parts.map(function (p) { return '<span>' + Fmt.esc(p[0]) + ': ' + (p[1] === null || p[1] === undefined ? '<b class="bad">' + L('thiếu', 'missing') + '</b>' : '<b>' + p[1] + '</b>') + '</span>'; }).join('') + '</div>';
+};
+Spd.withData = function (fn) {
+  return function (v, el, rec) {
+    if (Spd.D) return fn(v, el, rec);
+    Spd.pv(el, [['…', '']]);
+    Spd.load().then(function () { fn(v, el, rec); }).catch(function () { el.classList.add('hidden'); });
+  };
+};
+(function () {
+  var n = function (x) { return x === '' || x === null || x === undefined || isNaN(Number(x)) ? null : Number(x); };
+  var mul = function (a, b) { return a === null || b === null ? null : a * b; };
+  var div = function (a, b) { return a === null || b === null || !b ? null : a / b; };
+  var f0 = function (x) { return x === null ? null : Number(x).toLocaleString('en-US', { maximumFractionDigits: 0 }); };
+  var f3 = function (x) { return x === null ? null : Number(x).toLocaleString('en-US', { maximumFractionDigits: Math.abs(x) < 100 ? 3 : 0 }); };
+  var pc = function (x) { return x === null ? null : (x * 100).toFixed(1) + '%'; };
+  var B = function () { return Spd.D.base; };
+  var prj = function (id) { return (Spd.D.projects.filter(function (p) { return p.id === id; })[0]) || null; };
+  UI.FORM_PREVIEW.Projects = Spd.withData(function (v, el) {
+    if (!v.fx_date) return Spd.pv(el, []);
+    Spd.pv(el, [[L('Tỷ giá bán', 'FX sell') + (v.sell_currency ? ' (' + v.sell_currency + ')' : ''), v.sell_currency ? f3(Spd.rate(v.sell_currency, v.fx_date)) : '—'],
+      [L('Tỷ giá vốn', 'FX cost') + (v.cost_currency ? ' (' + v.cost_currency + ')' : ''), v.cost_currency ? f3(Spd.rate(v.cost_currency, v.fx_date)) : '—'],
+      [L('Tỷ giá USD', 'FX USD'), f3(Spd.rate('USD', v.fx_date))]]);
+  });
+  UI.FORM_PREVIEW.Project_Items = Spd.withData(function (v, el) {
+    var p = prj(v.project_id);
+    if (!p) return Spd.pv(el, []);
+    var cost = (n(v.cost_material) || 0) + (n(v.cost_fabrication) || 0) + (n(v.cost_erection) || 0) + (n(v.cost_other) || 0);
+    var sB = mul(n(v.unit_sell), p.fxs), cB = mul(cost, p.fxc), gm = sB === null || cB === null ? null : sB - cB;
+    Spd.pv(el, [[L('Tổng giá vốn nhập (', 'Entered unit cost (') + (p.cc || '') + ')', f3(cost)], [L('Giá bán (', 'Price (') + B() + ')', f0(sB)], [L('Giá vốn (', 'Cost (') + B() + ')', f0(cB)],
+      [L('Giá bán (USD)', 'Price (USD)'), f3(div(sB, p.fxu))], [L('Lãi gộp (USD)', 'GM (USD)'), f3(div(gm, p.fxu))], ['GM%', gm === null || !sB ? null : pc(gm / sB)]]);
+  });
+  UI.FORM_PREVIEW.Material_Prices = Spd.withData(function (v, el) {
+    if (!v.currency || !v.effective_date) return Spd.pv(el, []);
+    var r = Spd.rate(v.currency, v.effective_date), b = mul(n(v.unit_price), r), u = Spd.rate('USD', v.effective_date);
+    Spd.pv(el, [[L('Tỷ giá', 'FX rate'), f3(r)], [L('Đơn giá (', 'Price (') + B() + ')', f0(b)], [L('Đơn giá (USD)', 'Price (USD)'), f3(div(b, u))]]);
+  });
+  UI.FORM_PREVIEW.Project_Freight = Spd.withData(function (v, el) {
+    var p = prj(v.project_id);
+    if (!p || !v.currency) return Spd.pv(el, []);
+    var r = Spd.rate(v.currency, p.fd), b = mul(n(v.freight_cost), r);
+    Spd.pv(el, [[L('Tỷ giá (ngày ', 'FX (date ') + (Fmt.date(p.fd) || '—') + ')', f3(r)], [L('Cước (', 'Cost (') + B() + ')', f0(b)], [L('Cước (USD)', 'Cost (USD)'), f3(div(b, p.fxu))]]);
+  });
+  var input = function (job) {
+    return Spd.withData(function (v, el) {
+      var p = prj(v.project_id);
+      if (!p || !v.currency) return Spd.pv(el, []);
+      var date = job ? v.price_date : p.fd, r = Spd.rate(v.currency, date), b = mul(n(v.unit_price), r);
+      var u = job ? Spd.rate('USD', date) : p.fxu;
+      var ref = Spd.D.prices.filter(function (x) { return x.id === v.price_id; })[0];
+      var parts = [[L('Tỷ giá', 'FX rate') + (date ? ' (' + Fmt.date(date) + ')' : ''), date ? f3(r) : null], [L('Đơn giá (', 'Price (') + B() + ')', f0(b)], [L('Đơn giá (USD)', 'Price (USD)'), f3(div(b, u))]];
+      if (ref) parts.push([L('So bảng giá', 'Vs price list'), b === null || !ref.base ? null : pc(b / ref.base - 1)], [L('Quy cách', 'Spec'), ref.spec === v.specification ? 'OK' : 'Spec differs']);
+      if (job) {
+        var bids = Spd.D.inb.filter(function (x) { return x.prj === v.project_id && x.mat === v.material_id && x.spec === v.specification; });
+        var bb = Spd.avg(bids.map(function (x) { return x.base; }));
+        parts.push([L('So Bid', 'Vs bid'), bids.length ? (b === null || !bb ? null : pc(b / bb - 1)) : L('không ghép được', 'no match')]);
+      }
+      Spd.pv(el, parts);
+    });
+  };
+  UI.FORM_PREVIEW.Project_Inputs_Bid = input(false);
+  UI.FORM_PREVIEW.Project_Inputs_Job = input(true);
+  UI.FORM_PREVIEW.FX_Rates = Spd.withData(function (v, el, rec) {
+    if (!v.currency || !v.effective_date) return Spd.pv(el, []);
+    var prev = Spd.D.fx.filter(function (r) { return r.c === v.currency && r.id !== rec.fx_id && String(r.d).slice(0, 10) < String(v.effective_date).slice(0, 10); })
+      .sort(function (a, b) { return a.d < b.d ? 1 : -1; })[0];
+    var same = Spd.D.fx.filter(function (r) { return r.c === v.currency && r.id !== rec.fx_id && String(r.d).slice(0, 10) === String(v.effective_date).slice(0, 10); })[0];
+    Spd.pv(el, [[L('Tỷ giá trước đó', 'Previous rate'), prev ? f3(prev.r) + ' (' + Fmt.date(prev.d) + ')' : '—'],
+      [L('Thay đổi', 'Change'), prev && n(v.rate) ? pc(n(v.rate) / prev.r - 1) : '—'], same ? [L('Trùng ngày', 'Same date'), '<span class="neg">' + Fmt.esc(same.id) + '</span>'] : null]);
+  });
+})();
+</script>

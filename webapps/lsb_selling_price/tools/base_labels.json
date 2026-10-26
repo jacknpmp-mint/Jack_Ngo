@@ -1,0 +1,512 @@
+{
+ "columns": {
+  "Lead_id": [
+   "Mã lead",
+   "Lead ID"
+  ],
+  "Company_name": [
+   "Tên công ty",
+   "Company name"
+  ],
+  "Nation": [
+   "Quốc gia",
+   "Country"
+  ],
+  "Industry_segment": [
+   "Ngành",
+   "Industry segment"
+  ],
+  "Lead_source": [
+   "Nguồn lead",
+   "Lead source"
+  ],
+  "Contact_name": [
+   "Người liên hệ",
+   "Contact name"
+  ],
+  "Contact_title": [
+   "Chức danh",
+   "Contact title"
+  ],
+  "Contact_email": [
+   "Email liên hệ",
+   "Contact email"
+  ],
+  "Owner_id": [
+   "Người phụ trách",
+   "Owner"
+  ],
+  "Created_day": [
+   "Ngày tạo",
+   "Created on"
+  ],
+  "Lead_status": [
+   "Trạng thái lead",
+   "Lead status"
+  ],
+  "Lead_website": [
+   "Website",
+   "Website"
+  ],
+  "Year": [
+   "Năm",
+   "Year"
+  ],
+  "Quarter": [
+   "Quý",
+   "Quarter"
+  ],
+  "Customer_id": [
+   "Mã khách hàng",
+   "Customer ID"
+  ],
+  "Tax_code": [
+   "Mã số thuế",
+   "Tax code"
+  ],
+  "Address": [
+   "Địa chỉ",
+   "Address"
+  ],
+  "Contact": [
+   "Liên hệ",
+   "Contact"
+  ],
+  "First_contract_day": [
+   "Ngày HĐ đầu tiên",
+   "First contract date"
+  ],
+  "Account_owner_id": [
+   "Phụ trách khách hàng",
+   "Account owner"
+  ],
+  "Project_id": [
+   "Mã dự án",
+   "Project ID"
+  ],
+  "Project_code": [
+   "Mã nội bộ",
+   "Internal code"
+  ],
+  "Quotation_LSB-Code": [
+   "Mã báo giá nội bộ",
+   "Internal quotation code"
+  ],
+  "Project_name": [
+   "Tên dự án",
+   "Project name"
+  ],
+  "Project_address": [
+   "Địa chỉ công trình",
+   "Site address"
+  ],
+  "Project_owner": [
+   "Chủ đầu tư",
+   "Project owner"
+  ],
+  "Project_Maincons": [
+   "Tổng thầu",
+   "Main contractor"
+  ],
+  "Project_Consultant": [
+   "Tư vấn",
+   "Consultant"
+  ],
+  "Contract_no": [
+   "Số hợp đồng",
+   "Contract no."
+  ],
+  "Contract_USD": [
+   "Giá trị HĐ (USD)",
+   "Contract value (USD)"
+  ],
+  "Contract_VND": [
+   "Giá trị HĐ (VND)",
+   "Contract value (VND)"
+  ],
+  "Incoterm": [
+   "Incoterm",
+   "Incoterm"
+  ],
+  "Tonnage_EST": [
+   "Tấn dự kiến",
+   "Tonnage (planned)"
+  ],
+  "Tonnage_Actual": [
+   "Tấn thực tế",
+   "Tonnage (actual)"
+  ],
+  "Grossmargin_EST": [
+   "Lãi gộp dự kiến",
+   "Gross margin (planned)"
+  ],
+  "Grossmargin_Actual": [
+   "Lãi gộp thực tế",
+   "Gross margin (actual)"
+  ],
+  "Contract_day": [
+   "Ngày ký HĐ",
+   "Contract date"
+  ],
+  "Kickoff_day": [
+   "Ngày kick-off",
+   "Kick-off date"
+  ],
+  "RAD_date": [
+   "Hạn giao (RAD)",
+   "Required delivery (RAD)"
+  ],
+  "RAD_Revision": [
+   "Số lần đổi RAD",
+   "RAD revisions"
+  ],
+  "Installation_date_start": [
+   "Bắt đầu lắp dựng",
+   "Installation start"
+  ],
+  "Project_handover": [
+   "Ngày bàn giao",
+   "Handover date"
+  ],
+  "URL_Project_data": [
+   "Thư mục dữ liệu dự án",
+   "Project data folder"
+  ],
+  "PM_id": [
+   "PM",
+   "Project manager"
+  ],
+  "Status": [
+   "Trạng thái",
+   "Status"
+  ],
+  "Project_task_id": [
+   "Mã đầu việc",
+   "Task ID"
+  ],
+  "Task_id": [
+   "Đầu việc chuẩn",
+   "Standard task"
+  ],
+  "Phase": [
+   "Giai đoạn",
+   "Phase"
+  ],
+  "Task_duty": [
+   "Tên đầu việc",
+   "Task"
+  ],
+  "Start_day": [
+   "Ngày bắt đầu",
+   "Start date"
+  ],
+  "Due_day": [
+   "Hạn",
+   "Due date"
+  ],
+  "Done_day": [
+   "Ngày xong",
+   "Done on"
+  ],
+  "Shipping_id": [
+   "Mã lô hàng",
+   "Shipment ID"
+  ],
+  "Shipment_no": [
+   "Lô số",
+   "Shipment no."
+  ],
+  "Shipment_code": [
+   "Mã lô",
+   "Shipment code"
+  ],
+  "Quantity_ton": [
+   "Khối lượng (tấn)",
+   "Quantity (tons)"
+  ],
+  "Container_qty_plan": [
+   "Số container KH",
+   "Containers (planned)"
+  ],
+  "Container_qty_actual": [
+   "Số container TT",
+   "Containers (actual)"
+  ],
+  "Start_Fab": [
+   "Bắt đầu sản xuất",
+   "Fabrication start"
+  ],
+  "Completed_Fab": [
+   "Xong sản xuất",
+   "Fabrication done"
+  ],
+  "ETD_plan": [
+   "ETD kế hoạch",
+   "ETD (planned)"
+  ],
+  "ETD_actual": [
+   "ETD thực tế",
+   "ETD (actual)"
+  ],
+  "ETA_plan": [
+   "ETA kế hoạch",
+   "ETA (planned)"
+  ],
+  "ETA_actual": [
+   "ETA thực tế",
+   "ETA (actual)"
+  ],
+  "Vessel_no": [
+   "Tàu",
+   "Vessel"
+  ],
+  "BL_no": [
+   "Số vận đơn (B/L)",
+   "B/L no."
+  ],
+  "Delay_days": [
+   "Số ngày trễ",
+   "Delay (days)"
+  ],
+  "Lesson_id": [
+   "Mã bài học",
+   "Lesson ID"
+  ],
+  "Handover_day": [
+   "Ngày bàn giao",
+   "Handover date"
+  ],
+  "Category": [
+   "Nhóm",
+   "Category"
+  ],
+  "Issue_description": [
+   "Vấn đề",
+   "Issue"
+  ],
+  "Root_cause": [
+   "Nguyên nhân",
+   "Root cause"
+  ],
+  "Impact_USD": [
+   "Ảnh hưởng (USD)",
+   "Impact (USD)"
+  ],
+  "Impact_days": [
+   "Ảnh hưởng (ngày)",
+   "Impact (days)"
+  ],
+  "What_went_well": [
+   "Điều làm tốt",
+   "What went well"
+  ],
+  "To_improve": [
+   "Cần cải thiện",
+   "To improve"
+  ],
+  "Action_next_project": [
+   "Áp dụng dự án sau",
+   "Action for next project"
+  ],
+  "Customer_feedback": [
+   "Điểm khách hàng",
+   "Customer score"
+  ],
+  "Recorded_by": [
+   "Người ghi",
+   "Recorded by"
+  ],
+  "PaymentPlan_id": [
+   "Mã đợt thanh toán",
+   "Payment milestone ID"
+  ],
+  "Payment_code": [
+   "Đợt",
+   "Milestone"
+  ],
+  "Payment_pct": [
+   "% giá trị HĐ",
+   "% of contract"
+  ],
+  "Payment_USD": [
+   "Số tiền (USD)",
+   "Amount (USD)"
+  ],
+  "Payment_VND": [
+   "Số tiền (VND)",
+   "Amount (VND)"
+  ],
+  "Required_docs": [
+   "Chứng từ yêu cầu",
+   "Required documents"
+  ],
+  "PP_revision": [
+   "Lần điều chỉnh",
+   "Revision"
+  ],
+  "Collected_USD": [
+   "Đã thu (USD)",
+   "Collected (USD)"
+  ],
+  "Balance_USD": [
+   "Còn lại (USD)",
+   "Balance (USD)"
+  ],
+  "Pay_status": [
+   "Tình trạng thu",
+   "Payment status"
+  ],
+  "Paid_id": [
+   "Mã thu tiền",
+   "Payment ID"
+  ],
+  "Invoice_no": [
+   "Số hóa đơn",
+   "Invoice no."
+  ],
+  "Invoice_day": [
+   "Ngày hóa đơn",
+   "Invoice date"
+  ],
+  "Paid_USD": [
+   "Đã thu (USD)",
+   "Received (USD)"
+  ],
+  "Paid_VND": [
+   "Đã thu (VND)",
+   "Received (VND)"
+  ],
+  "Payment_day": [
+   "Ngày thanh toán",
+   "Payment date"
+  ],
+  "Cost_id": [
+   "Mã chi phí",
+   "Cost ID"
+  ],
+  "Vendor": [
+   "Nhà cung cấp",
+   "Vendor"
+  ],
+  "Cost_USD": [
+   "Chi phí (USD)",
+   "Cost (USD)"
+  ],
+  "Cost_VND": [
+   "Chi phí (VND)",
+   "Cost (VND)"
+  ],
+  "Invoice_code": [
+   "Ngày hóa đơn",
+   "Invoice date"
+  ],
+  "Cost_status": [
+   "Trạng thái chi phí",
+   "Cost status"
+  ],
+  "Staff_id": [
+   "Mã nhân sự",
+   "Staff ID"
+  ],
+  "Full_name": [
+   "Họ tên",
+   "Full name"
+  ],
+  "Role": [
+   "Vai trò",
+   "Role"
+  ],
+  "Email": [
+   "Email",
+   "Email"
+  ],
+  "Phone": [
+   "Điện thoại",
+   "Phone"
+  ],
+  "Access_level": [
+   "Quyền app",
+   "App access"
+  ],
+  "Active": [
+   "Đang hoạt động",
+   "Active"
+  ],
+  "Default_role": [
+   "Vai trò mặc định",
+   "Default role"
+  ],
+  "Std_duration_days": [
+   "Số ngày chuẩn",
+   "Standard duration (days)"
+  ],
+  "Task_SOP": [
+   "Tài liệu SOP",
+   "SOP document"
+  ],
+  "Note": [
+   "Ghi chú",
+   "Note"
+  ],
+  "Notes": [
+   "Ghi chú",
+   "Notes"
+  ],
+  "Description": [
+   "Mô tả",
+   "Description"
+  ],
+  "Amount": [
+   "Số tiền",
+   "Amount"
+  ],
+  "Quantity": [
+   "Số lượng",
+   "Quantity"
+  ],
+  "Unit": [
+   "Đơn vị",
+   "Unit"
+  ],
+  "Price": [
+   "Đơn giá",
+   "Unit price"
+  ],
+  "Department": [
+   "Phòng ban",
+   "Department"
+  ],
+  "Title": [
+   "Tiêu đề",
+   "Title"
+  ],
+  "Name": [
+   "Tên",
+   "Name"
+  ],
+  "Code": [
+   "Mã",
+   "Code"
+  ],
+  "Progress_pct": [
+   "Tiến độ",
+   "Progress"
+  ],
+  "Weight": [
+   "Trọng số",
+   "Weight"
+  ],
+  "Target": [
+   "Mục tiêu",
+   "Target"
+  ],
+  "Actual": [
+   "Thực tế",
+   "Actual"
+  ],
+  "Score": [
+   "Điểm",
+   "Score"
+  ]
+ }
+}

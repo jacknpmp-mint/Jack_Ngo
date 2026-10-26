@@ -1,0 +1,390 @@
+<script>
+/**
+ * JS.html — Lõi phía trình duyệt: gọi API, trạng thái, điều hướng, định dạng.
+ * Trang đăng ký vào App.pages: dashboard (Dashboard.html), entity (Entity.html — danh sách + 360° mọi bảng),
+ * catalog / activity / account (Components.html), trang riêng của từng DB (Custom.html).
+ * Song ngữ VN/EN — L(vi, en), App.setLang, App.tlabel/clabel/cnote; ngôn ngữ gửi kèm mỗi lệnh api().
+ * Form: App.missing (cờ Thiếu dữ liệu), báo mã chính thức khác mã dự kiến, ghi nháp khi rời trang.
+ */
+var App = {
+  boot: null,          // { user, caps, config, lookups, today }
+  pages: {},           // route → { title, render(view, params) }
+  current: null,
+  _busy: 0
+};
+
+/* ------------------------- Song ngữ VN / EN (v2.5) ------------------------- */
+/** Ngôn ngữ: lựa chọn đã lưu trên trình duyệt; lần đầu theo ngôn ngữ trình duyệt (vi → VN, khác → EN). */
+App.lang = (function () {
+  try { var s = localStorage.getItem('lsb.lang'); if (s === 'vi' || s === 'en') return s; } catch (e) { /* bỏ qua */ }
+  return String(navigator.language || 'vi').toLowerCase().indexOf('vi') === 0 ? 'vi' : 'en';
+})();
+/** Chuỗi giao diện theo ngôn ngữ hiện tại. */
+function L(vi, en) { return App.lang === 'en' && en ? en : vi; }
+
+/** Đổi chữ tĩnh trong Index.html (phần tử có data-en / data-en-title). */
+App.applyLang = function () {
+  document.documentElement.lang = App.lang;
+  document.querySelectorAll('[data-en]').forEach(function (el) {
+    if (el.dataset.vi === undefined) el.dataset.vi = el.textContent;
+    el.textContent = App.lang === 'en' ? el.dataset.en : el.dataset.vi;
+  });
+  document.querySelectorAll('[data-en-title]').forEach(function (el) {
+    if (el.dataset.viTitle === undefined) el.dataset.viTitle = el.getAttribute('title') || el.getAttribute('aria-label') || '';
+    var t = App.lang === 'en' ? el.dataset.enTitle : el.dataset.viTitle;
+    el.setAttribute(el.hasAttribute('aria-label') ? 'aria-label' : 'title', t);
+  });
+  var b = document.getElementById('lang');
+  if (b) {
+    b.textContent = App.lang === 'en' ? 'VN' : 'EN';
+    b.title = App.lang === 'en' ? 'Chuyển sang tiếng Việt' : 'Switch to English';
+  }
+};
+
+/** Chuyển ngôn ngữ: lưu lựa chọn, đổi chữ tĩnh, tải lại danh sách chọn (nhãn do server tạo) và trang hiện tại. */
+App.setLang = function (lang) {
+  App.lang = lang === 'en' ? 'en' : 'vi';
+  try { localStorage.setItem('lsb.lang', App.lang); } catch (e) { /* bỏ qua */ }
+  App.applyLang();
+  if (!App.boot) return;
+  App.renderUser();
+  App.buildMenu();
+  App.refreshAlerts();
+  App.refreshLookups().then(App.reload, App.reload);
+};
+
+/* ------------------------------- API ------------------------------- */
+App.api = function (action, payload) {
+  App.busy(1);
+  return new Promise(function (resolve, reject) {
+    if (!window.google || !google.script || !google.script.run) {
+      App.busy(-1);
+      reject({ code: 'OFFLINE', message: L('Không kết nối được Apps Script.', 'Cannot connect to Apps Script.') });
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function (res) {
+        App.busy(-1);
+        if (res && res.ok) resolve(res.data);
+        else reject(res && res.error ? res.error : { code: 'INTERNAL', message: L('Phản hồi không hợp lệ', 'Invalid response') });
+      })
+      .withFailureHandler(function (err) {
+        App.busy(-1);
+        reject({ code: 'NETWORK', message: (err && err.message) || String(err) });
+      })
+      .api(action, payload || {}, App.lang);
+  });
+};
+
+App.busy = function (d) {
+  App._busy = Math.max(0, App._busy + d);
+  var el = document.getElementById('busy');
+  if (el) el.classList.toggle('hidden', App._busy === 0);
+};
+
+/** Báo lỗi API chuẩn. */
+App.fail = function (err) {
+  var msg = (err && err.message) || String(err);
+  UI.toast(msg, 'danger', 7000);
+  var expected = { VALIDATION: 1, FORBIDDEN: 1, CONFLICT: 1, NOT_FOUND: 1, MODULE_DISABLED: 1 };
+  if (!(err && expected[err.code])) console.error(err);
+};
+
+/* ----------------------------- Khởi động ----------------------------- */
+App.start = function () {
+  App.applyLang();
+  document.getElementById('page-title').textContent = L('Đang tải…', 'Loading…');
+  App.bindShell();
+  App.api('app.bootstrap').then(function (boot) {
+    App.boot = boot;
+    Draft.purge();
+    App.renderUser();
+    App.applyCaps();
+    App.refreshAlerts();
+    var startRoute = { route: 'dashboard', params: {} };
+    if (window.google && google.script && google.script.url) {
+      google.script.url.getLocation(function (loc) {
+        var parsed = App.parseHash(loc && loc.hash);
+        App.go(parsed ? parsed.route : startRoute.route, parsed ? parsed.params : {}, { replace: true });
+      });
+    } else {
+      App.go(startRoute.route, startRoute.params, { replace: true });
+    }
+    if (window.google && google.script && google.script.history) {
+      google.script.history.setChangeHandler(function (e) {
+        if (e && e.state && e.state.route) App.go(e.state.route, e.state.params || {}, { fromHistory: true });
+      });
+    }
+  }).catch(function (err) {
+    document.getElementById('page-title').textContent = L('Không vào được ứng dụng', 'Cannot open the app');
+    document.getElementById('view').innerHTML =
+      L('<div class="card fatal"><h3>Không vào được ứng dụng</h3><p>', '<div class="card fatal"><h3>Cannot open the app</h3><p>') + Fmt.esc(err.message || err) + '</p>' +
+      L('<p class="muted small">Mã lỗi: ', '<p class="muted small">Error code: ') + Fmt.esc(err.code || '') + '</p>' +
+      L('<button class="btn primary" onclick="location.reload()">Thử lại</button></div>', '<button class="btn primary" onclick="location.reload()">Retry</button></div>');
+  });
+};
+
+App.bindShell = function () {
+  document.getElementById('nav').addEventListener('click', function (e) {
+    var a = e.target.closest('.nav-item');
+    if (!a || a.classList.contains('hidden')) return;
+    var params = a.dataset.table ? { table: a.dataset.table } : {};
+    if (!a.dataset.route) return;
+    App.go(a.dataset.route, params);
+    document.getElementById('app').classList.remove('nav-open');
+  });
+  document.getElementById('menu-btn').addEventListener('click', function () {
+    document.getElementById('app').classList.toggle('nav-open');
+  });
+  document.getElementById('bell').addEventListener('click', function () { App.go('dashboard', { focus: 'alerts' }); });
+  document.getElementById('lang').addEventListener('click', function () { App.setLang(App.lang === 'en' ? 'vi' : 'en'); });
+  // v2.4: tải lại / đóng tab khi đang nhập → ghi nháp ngay (không chờ debounce)
+  var flush = function () { if (UI._flushDraft) UI._flushDraft(); };
+  window.addEventListener('pagehide', flush);
+  window.addEventListener('beforeunload', flush);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flush(); });
+};
+
+App.renderUser = function () {
+  var u = App.boot.user;
+  var initials = (u.name || u.email).split(/\s+/).map(function (w) { return w[0]; }).slice(-2).join('').toUpperCase();
+  document.getElementById('user-chip').innerHTML =
+    '<span class="nm">' + Fmt.esc(u.name) + ' · ' + UI.badge(u.role, u.role === 'Admin' ? 'orange' : u.role === 'Editor' ? 'blue' : '') +
+    '</span><span class="avatar" title="' + Fmt.esc(u.email) + '">' + Fmt.esc(initials) + '</span>';
+};
+
+App.applyCaps = function () {
+  var caps = App.boot.caps;
+  document.querySelectorAll('[data-cap]').forEach(function (el) {
+    el.classList.toggle('hidden', !caps[el.dataset.cap]);
+  });
+  App.buildMenu();
+};
+
+/** Menu sinh từ MENU (01_Config.gs): mỗi nhóm → các mục; bỏ mục có bảng không nằm trong SCHEMA; ẩn nhóm rỗng. */
+App.buildMenu = function () {
+  var cfg = App.boot.config, tables = cfg.tables, holder = document.getElementById('nav-dynamic');
+  holder.innerHTML = (cfg.menu || []).map(function (g) {
+    var items = (g.items || []).filter(function (it) { return !it.table || tables[it.table]; });
+    if (!items.length) return '';
+    return '<div class="nav-group"><h6>' + Fmt.esc(L(g.group[0], g.group[1])) + '</h6>' + items.map(function (it) {
+      var route = it.route || (cfg.catalogs.indexOf(it.table) >= 0 ? 'catalog' : 'entity');
+      var label = it.label ? L(it.label[0], it.label[1]) : App.tlabel(it.table);
+      return '<a class="nav-item" data-route="' + route + '"' + (it.table ? ' data-table="' + it.table + '"' : '') + '><span class="ico">' +
+        Fmt.esc(it.icon || '▪') + '</span><span>' + Fmt.esc(label) + '</span></a>';
+    }).join('') + '</div>';
+  }).join('');
+  var brand = document.getElementById('brand');
+  if (brand) brand.innerHTML = '<b>' + Fmt.esc(cfg.app.brand || cfg.app.name) + '</b><span>' + Fmt.esc(cfg.app.subtitle ? L(cfg.app.subtitle[0], cfg.app.subtitle[1]) : '') + '</span>';
+};
+
+/** Trang cần bảng có trong Database (chặn mở bằng link/hash cũ). */
+App.pageAllowed = function (route, params) {
+  if ((route === 'catalog' || route === 'entity') && params && params.table && !App.boot.config.tables[params.table]) return false;
+  return true;
+};
+
+App.refreshAlerts = function () {
+  App.api('notification.list', {}).then(function (res) {
+    App.alerts = res;
+    var n = res.counts.danger + res.counts.warn;
+    var dot = document.getElementById('bell-count');
+    dot.textContent = n > 99 ? '99+' : n;
+    dot.classList.toggle('hidden', n === 0);
+  }).catch(function () {});
+};
+
+App.refreshLookups = function () {
+  return App.api('lookups.get').then(function (l) { App.boot.lookups = l; return l; });
+};
+
+/* ----------------------------- Điều hướng ----------------------------- */
+App.parseHash = function (hash) {
+  if (!hash) return null;
+  var parts = String(hash).replace(/^#?\/?/, '').split('/');
+  var route = parts[0];
+  if (!route) return null;
+  var params = {};
+  if (route === 'entity' || route === 'catalog') params.table = decodeURIComponent(parts[1] || '');
+  if (route === 'entity' && parts[2]) params.id = decodeURIComponent(parts[2]);
+  if (route !== 'entity' && route !== 'catalog' && parts[1]) params.id = decodeURIComponent(parts[1]);
+  return { route: route, params: params };
+};
+
+App.go = function (route, params, opts) {
+  params = params || {}; opts = opts || {};
+  var page = App.pages[route];
+  if (!page || (App.boot && !App.pageAllowed(route, params))) { route = 'dashboard'; page = App.pages.dashboard; params = {}; }
+  App.current = { route: route, params: params };
+  document.querySelectorAll('.nav-item').forEach(function (a) {
+    var same = a.dataset.route === route && (!a.dataset.table || a.dataset.table === params.table);
+    a.classList.toggle('active', same || (!!params.parentTable && a.dataset.table === params.parentTable));
+  });
+  var title = typeof page.title === 'function' ? page.title(params) : page.title;
+  document.getElementById('page-title').textContent = title;
+  document.title = title + ' · ' + ((App.boot && App.boot.config.app.brand) || '');
+  var view = document.getElementById('view');
+  view.innerHTML = L('<div class="loading"><div class="spinner"></div>Đang tải…</div>', '<div class="loading"><div class="spinner"></div>Loading…</div>');
+  window.scrollTo(0, 0);
+  if (!opts.fromHistory && window.google && google.script && google.script.history) {
+    var hash = route + (params.table ? '/' + encodeURIComponent(params.table) : '') + (params.id ? '/' + encodeURIComponent(params.id) : '');
+    var st = { route: route, params: params };
+    if (opts.replace) google.script.history.replace(st, null, hash);
+    else google.script.history.push(st, null, hash);
+  }
+  try {
+    var p = page.render(view, params);
+    if (p && p.catch) p.catch(function (err) { App.renderError(view, err); });
+  } catch (err) { App.renderError(view, err); }
+};
+
+App.reload = function () { if (App.current) App.go(App.current.route, App.current.params, { fromHistory: true }); };
+
+App.renderError = function (view, err) {
+  view.innerHTML = L('<div class="card"><h3>Không tải được trang</h3><p>', '<div class="card"><h3>Could not load the page</h3><p>') + Fmt.esc(err.message || err) +
+    L('</p><button class="btn" onclick="App.reload()">Thử lại</button></div>', '</p><button class="btn" onclick="App.reload()">Retry</button></div>');
+  console.error(err);
+};
+
+/* ---------------------- Tiện ích dữ liệu/schema ---------------------- */
+App.table = function (name) { return App.boot.config.tables[name]; };
+App.col = function (table, name) {
+  var t = App.table(table);
+  for (var i = 0; i < t.columns.length; i++) if (t.columns[i].name === name) return t.columns[i];
+  return null;
+};
+/** Nhãn bảng theo ngôn ngữ (11_I18n.gs → config.i18n). */
+App.tlabel = function (table) {
+  var x = ((App.boot.config.i18n || {}).tables || {})[table];
+  return x ? L(x[0], x[1]) : ((App.table(table) || {}).label || table);
+};
+/** Nhãn cột thân thiện; khóa 'Bảng.Cột' ưu tiên hơn tên cột. Không có → tên cột gốc. */
+App.clabel = function (table, name) {
+  var m = (App.boot.config.i18n || {}).columns || {};
+  var x = m[table + '.' + name] || m[name];
+  return x ? L(x[0], x[1]) : name;
+};
+/** Ghi chú cột: EN lấy từ I18N_NOTES_EN; ghi chú tiếng Việt chưa dịch thì ẩn khi ở EN. */
+App.cnote = function (table, c) {
+  if (App.lang === 'en') {
+    var n = ((App.boot.config.i18n || {}).notesEn || {})[table + '.' + c.name];
+    if (n) return n;
+    if (c.note && /[\u00C0-\u1EF9]/.test(c.note)) return '';
+  }
+  return c.note || '';
+};
+/** Nhãn hiển thị cho một mã khóa ngoại. */
+App.label = function (table, id) {
+  if (!id) return '';
+  var list = (App.boot.lookups || {})[table] || [];
+  for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i].label || id;
+  return id;
+};
+/** Cột còn thiếu (bắt buộc / `need`) — dùng Missing do server tính nếu có (danh sách dự án, lead). */
+App.missing = function (table, r) {
+  if (r && Array.isArray(r.Missing)) return r.Missing;
+  var t = App.table(table);
+  if (!t || !r) return [];
+  return t.columns.filter(function (c) {
+    return !c.auto && c.key !== 'PK' && (c.need || c.required) && (r[c.name] === '' || r[c.name] === null || r[c.name] === undefined);
+  }).map(function (c) { return c.name; });
+};
+App.can = function (cap) { return !!(App.boot && App.boot.caps[cap]); };
+App.canWrite = function (table) {
+  return (App.boot.config.catalogs.indexOf(table) >= 0) ? App.can('catalog') : App.can('write');
+};
+
+/** Mở form thêm/sửa; lưu xong gọi onSaved(record). */
+App.edit = function (table, record, opts) {
+  opts = opts || {};
+  UI.formModal(table, record || {}, {
+    defaults: opts.defaults, context: opts.context, title: opts.title,
+    onSubmit: function (data, info) {
+      return App.api('record.save', { table: table, record: data }).then(function (res) {
+        var id = res.record[App.table(table).pk];
+        (res.warnings || []).forEach(function (w) { UI.toast(w, 'warn', 6000); });
+        UI.toast((res.isNew ? L('Đã thêm ', 'Added ') : L('Đã lưu ', 'Saved ')) + id, 'ok');
+        if (res.isNew && info && info.previewId && info.previewId !== id) {
+          UI.toast(L('Mã chính thức là ', 'The official ID is ') + id + L(' (mã dự kiến ', ' (preview ID ') + info.previewId + L(' đã được người khác dùng trước).', ' was taken by someone else first).'), 'warn', 9000);
+        }
+        App.refreshLookups();
+        App.refreshAlerts();
+        if (opts.onSaved) opts.onSaved(res.record);
+        return res;
+      });
+    },
+    onDelete: record && record[App.table(table).pk] && App.can('del') ? function () {
+      return App.remove(table, record[App.table(table).pk], opts.onDeleted);
+    } : null
+  });
+};
+
+App.remove = function (table, id, onDone) {
+  return UI.confirm(L('Xóa ', 'Delete ') + id + L('? Thao tác không hoàn tác (dòng trong Sheet được làm trống để dùng lại).', '? This cannot be undone (the Sheet row is cleared for reuse).')).then(function (yes) {
+    if (!yes) return false;
+    return App.api('record.delete', { table: table, id: id }).then(function () {
+      UI.toast(L('Đã xóa ', 'Deleted ') + id, 'ok');
+      App.refreshLookups();
+      App.refreshAlerts();
+      if (onDone) onDone(id);
+      return true;
+    });
+  });
+};
+
+/* ------------------------------ Định dạng ------------------------------ */
+var Fmt = {
+  esc: function (s) {
+    return String(s === null || s === undefined ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  },
+  num: function (v, d) {
+    if (v === '' || v === null || v === undefined || isNaN(Number(v))) return '';
+    return Number(v).toLocaleString('en-US', { minimumFractionDigits: d || 0, maximumFractionDigits: d === undefined ? 2 : d });
+  },
+  usd: function (v) { return v === '' || v === null || v === undefined ? '' : Fmt.num(Math.round(Number(v)), 0); },
+  compact: function (v) {
+    v = Number(v) || 0; var a = Math.abs(v);
+    if (a >= 1e9) return (v / 1e9).toFixed(2) + 'B';
+    if (a >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+    if (a >= 1e3) return (v / 1e3).toFixed(1) + 'K';
+    return Fmt.num(v, 0);
+  },
+  pct: function (v, d) {
+    if (v === '' || v === null || v === undefined || isNaN(Number(v))) return '';
+    return (Number(v) * 100).toFixed(d === undefined ? 0 : d) + '%';
+  },
+  /** 'yyyy-mm-dd' + n ngày → 'yyyy-mm-dd' ('' nếu ngày sai). */
+  addDays: function (iso, n) {
+    var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return '';
+    var d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3] + Number(n || 0)));
+    return d.toISOString().slice(0, 10);
+  },
+  date: function (iso) {
+    if (!iso) return '';
+    var m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? m[3] + '/' + m[2] + '/' + m[1] : String(iso);
+  },
+  datetime: function (v) {
+    if (!v) return '';
+    var m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+    return m ? m[3] + '/' + m[2] + '/' + m[1] + (m[4] ? ' ' + m[4] + ':' + m[5] : '') : String(v);
+  },
+  /** Định dạng theo định nghĩa cột. */
+  cell: function (col, v) {
+    if (v === '' || v === null || v === undefined) return '';
+    if (!col) return Fmt.esc(v);
+    if (col.key === 'PK') return '<span class="id">' + Fmt.esc(v) + '</span>';
+    if (col.key === 'FK') return Fmt.esc(App.label(col.ref, v)) + ' <span class="id">' + Fmt.esc(v) + '</span>';
+    if (col.type === 'date') return Fmt.date(v);
+    if (col.pct) return Fmt.pct(v, 0);
+    if (col.money) return Fmt.usd(v);
+    if (col.type === 'number') return /^(year|nam|năm)$|_year$|_no$/i.test(col.name) ? Fmt.esc(v) : Fmt.num(v);
+    if (col.format === 'url') return '<a href="' + Fmt.esc(v) + L('" target="_blank" rel="noopener">Mở link</a>', '" target="_blank" rel="noopener">Open link</a>');
+    if (col.format === 'email') return '<a href="mailto:' + Fmt.esc(v) + '">' + Fmt.esc(v) + '</a>';
+    if (col.list) return UI.status(v);
+    return Fmt.esc(v);
+  }
+};
+</script>
