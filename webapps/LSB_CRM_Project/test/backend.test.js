@@ -478,6 +478,21 @@ t('v2.7: board có Project_code, Payment_VND, Paid_VND cho bảng Quá hạn / �
   ok(b.paid.every(x => 'vnd' in x));
 });
 
+/* ---------------- Bộ nhớ đệm server (CacheService, bản đang chạy) + v2.7 ---------------- */
+t('bộ nhớ đệm: lưu qua app (kể cả quy đổi VND) thấy ngay; sửa tay trong Sheet → onEdit làm mới', () => {
+  const A = makeContext();
+  okRes(A.api('project.list', {}));
+  ok(Object.keys(A.cache).length > 0, 'đã đệm');
+  const c = okRes(A.api('record.save', { table: 'LSB_cost', record: { Project_id: 'PJ-2026-001', Cost_VND: 2600000 } })).record;
+  eq(okRes(A.api('record.get', { table: 'LSB_cost', id: c.Cost_id })).Cost_USD, 100, 'đọc lại sau ghi qua app');
+  const sh = A.ss.getSheetByName('LSB_project');
+  const col = sh.grid[0].findIndex(x => x.v === 'Project_name') + 1;
+  sh.cell(2, col, true).v = 'Tên sửa tay';
+  A.edited();
+  eq(okRes(A.api('record.get', { table: 'LSB_project', id: 'PJ-2026-001' })).Project_name, 'Tên sửa tay', 'sau onEdit');
+  eq(okRes(A.api('project.list', {})).rows.find(r => r.Project_id === 'PJ-2026-001').Project_name, 'Tên sửa tay');
+});
+
 /* ---------------- Smoke test trên dữ liệu thật v4.3_Project (test/data_real.json) ---------------- */
 const fs = require('fs');
 if (fs.existsSync(require('path').join(__dirname, 'data_real.json'))) {

@@ -59,6 +59,7 @@ function makeContext(opts) {
   ss.getSheetByName = n => ss.sheets[n] || null;
   ss.insertSheet = n => (ss.sheets[n] = new Sheet(ss, n, []));
   const props = {};
+  const cache = {};
   const state = { email: 'email' in opts ? opts.email : 'admin@lsb.example', logs: [] };
   const ctx = {
     console: { log() {}, warn: (...a) => state.logs.push(['warn', ...a]), error: (...a) => state.logs.push(['error', ...a]) },
@@ -73,6 +74,13 @@ function makeContext(opts) {
           .replace('HH', p(d.getHours())).replace('mm', p(d.getMinutes())).replace('ss', p(d.getSeconds()));
       }
     },
+    // CacheService giả (dùng chung trong 1 context như ScriptCache thật) — chạy cả đường bộ nhớ đệm của Data.gs.
+    CacheService: opts.noCache ? undefined : { getScriptCache: () => ({
+      get: k => (k in cache ? cache[k] : null),
+      getAll: ks => { const o = {}; ks.forEach(k => { if (k in cache) o[k] = cache[k]; }); return o; },
+      put: (k, v) => { if (String(v).length > 100000) throw new Error('cache value too large'); cache[k] = String(v); },
+      putAll: m => Object.keys(m).forEach(k => { if (String(m[k]).length > 100000) throw new Error('cache value too large'); cache[k] = String(m[k]); }),
+      remove: k => { delete cache[k]; } }) },
     HtmlService: {}, ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/TEST/exec' }) }
   };
   vm.createContext(ctx);
@@ -89,7 +97,9 @@ function makeContext(opts) {
   }
   ss.writes = 0;
   return {
-    ctx, ss, props, state,
+    ctx, ss, props, state, cache,
+    /** Mô phỏng sửa tay trong Sheet: gọi simple trigger onEdit như Google. */
+    edited() { vm.runInContext('onEdit({})', ctx); return this; },
     as(email) { state.email = email; vm.runInContext('AUTH_USER_ = null; DATA_CACHE_ = {};', ctx); return this; },
     api(action, payload, lang) { vm.runInContext('AUTH_USER_ = null; DATA_CACHE_ = {};', ctx); return JSON.parse(JSON.stringify(ctx.api(action, payload, lang))); }
   };

@@ -70,6 +70,16 @@ Cách sửa xlsx: sửa trực tiếp XML của sheet (không lưu qua openpyxl)
 Test: tìm ra nguyên nhân ca *Nháp* chập chờn từ v2.6 — test mở `file://`, Chromium headless đôi khi mất localStorage khi tải lại (app không xóa; qua http 28/28 giữ nháp) → test UI nay chạy qua `http://127.0.0.1`.
 Script ID dự án đang chạy (từ người dùng) nằm trong `.clasp.json` của gói clasp (không đưa lên GitHub).
 
+**02/11/2026 — đã push v2.7 lên dự án thật (chưa deploy):**
+- Đăng nhập clasp trong session bằng `mth@luckysteel.vn`.
+- Sao lưu code trên dự án trước khi push: **v2.6.0 + bộ nhớ đệm** (CacheService trong `Data.gs` + `onEdit`; bộ đệm 2 phút trên trình duyệt trong `JS.html`; `08_Activity`). Phần bộ nhớ đệm không có trong bản v2.6 của skill.
+- Bản push = code đang chạy + bản vá v2.6→v2.7 (7 file, áp sạch).
+- Test: backend 59/59 (mock thêm CacheService + 1 ca bộ nhớ đệm), UI 25/25 ×2.
+- Đã clone lại kiểm chứng: 25/25 file khớp, `VERSION 2.7.0`.
+- Bản triển khai: `@2 - PSE06_Project Managemnt` (đang phục vụ người dùng) + `@HEAD`.
+- **Việc tiếp:** người dùng thử URL /dev → deploy.
+- **Rủi ro cần hỏi:** bộ đệm trình duyệt 2 phút có thể cho mở form sửa trên dữ liệu cũ → Lưu ghi đè thay đổi của người khác trong 2 phút đó.
+
 **Trạng thái:** v2.4 xong trong mô phỏng (52/52 backend, 20/20 UI Chromium). **Cần:** dán vào Apps Script và nghiệm thu bước 9–14 trên Google thật. Rủi ro còn lại: nháp dùng localStorage trong iframe của Apps Script (`*.googleusercontent.com`) — trình duyệt chặn lưu trữ bên thứ ba / ẩn danh thì không có nháp (form vẫn lưu bình thường).
 
 ## 3. Quyết định đã chốt (tích lũy)

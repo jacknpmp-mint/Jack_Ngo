@@ -252,7 +252,8 @@ window.google = { script: {
     await page.fill('input[name=Contract_no]', 'HĐ-NHÁP');
     await page.click('[data-a=cancel]');
     A.api('record.save', { table: 'LSB_project', record: { Project_id: 'PJ-2026-001', Incoterm: 'DAP' } });
-    await page.evaluate(() => App.reload());
+    // người khác sửa trên server: bộ đệm trình duyệt (API_CACHE_MS = 2 phút) giữ bản cũ → mô phỏng đã qua 2 phút
+    await page.evaluate(() => { App.clearCache(); App.reload(); });
     await page.waitForSelector('#edit');
     await page.click('#edit');
     await page.waitForSelector('.draft-bar.warn:has-text("Incoterm")');

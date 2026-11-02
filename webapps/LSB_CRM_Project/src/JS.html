@@ -53,7 +53,22 @@ App.setLang = function (lang) {
 };
 
 /* ------------------------------- API ------------------------------- */
+/**
+ * Bộ nhớ đệm trên trình duyệt cho lệnh chỉ đọc: quay lại mục vừa xem (trong API_CACHE_MS) hiện ngay, không gọi server.
+ * Mọi lệnh ghi thành công (lưu / xóa) xóa sạch bộ đệm. Lưu dạng chuỗi JSON → mỗi lần lấy là bản sao mới.
+ */
+App.API_CACHE_MS = 120000;
+App.READ_ACTIONS = { 'lookups.get': 1, 'dashboard.get': 1, 'notification.list': 1, 'project.list': 1, 'project.get360': 1,
+  'customer.list': 1, 'customer.lead360': 1, 'bidding.status': 1, 'bidding.tasks': 1, 'quotation.status': 1,
+  'quotation.list': 1, 'quotation.get360': 1, 'record.list': 1, 'record.get': 1, 'record.related': 1, 'activity.list': 1 };
+App._cache = {};
+App.clearCache = function () { App._cache = {}; };
+
 App.api = function (action, payload) {
+  var readOnly = !!App.READ_ACTIONS[action];
+  var ck = readOnly ? action + '|' + App.lang + '|' + JSON.stringify(payload || {}) : null;
+  var hit = ck && App._cache[ck];
+  if (hit && Date.now() - hit.t < App.API_CACHE_MS) return Promise.resolve(JSON.parse(hit.s));
   App.busy(1);
   return new Promise(function (resolve, reject) {
     if (!window.google || !google.script || !google.script.run) {
@@ -64,7 +79,11 @@ App.api = function (action, payload) {
     google.script.run
       .withSuccessHandler(function (res) {
         App.busy(-1);
-        if (res && res.ok) resolve(res.data);
+        if (res && res.ok) {
+          if (ck) { try { App._cache[ck] = { t: Date.now(), s: JSON.stringify(res.data) }; } catch (e) { /* bỏ qua */ } }
+          else if (action !== 'app.bootstrap' && action !== 'record.peekId' && action !== 'user.me' && action !== 'structure.check') App.clearCache();
+          resolve(res.data);
+        }
         else reject(res && res.error ? res.error : { code: 'INTERNAL', message: L('Phản hồi không hợp lệ', 'Invalid response') });
       })
       .withFailureHandler(function (err) {

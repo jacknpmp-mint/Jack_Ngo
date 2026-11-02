@@ -16,6 +16,76 @@
 
 var DATA_CACHE_ = {};
 
+/* ============== Bộ nhớ đệm giữa các lượt gọi (CacheService) ==============
+ * Mỗi lần chuyển trang là một lượt gọi mới → trước đây phải đọc lại mọi sheet (chậm).
+ * Nay bảng đã đọc được lưu vào CacheService (DATA_TTL_ giây), dùng chung mọi người dùng.
+ * Mọi khóa gắn "phiên bản dữ liệu"; ghi qua app (Data_withLock_) hoặc sửa tay trong Sheet (onEdit) → đổi phiên bản
+ * → lần đọc sau lấy dữ liệu mới. Trong khóa ghi luôn đọc thẳng Sheet (DATA_FRESH_).
+ */
+var DATA_TTL_ = 600;
+var DATA_CHUNK_ = 30000;   // ký tự / khóa (giới hạn 100KB / giá trị, tiếng Việt tối đa 3 byte / ký tự)
+var DATA_FRESH_ = false;
+
+function Data_cache_() {
+  try { return CacheService.getScriptCache(); } catch (e) { return null; }
+}
+
+/** Phiên bản dữ liệu hiện hành (đọc 1 lần / lượt gọi). */
+function Data_cacheVer_() {
+  if (DATA_CACHE_.__ver) return DATA_CACHE_.__ver;
+  var c = Data_cache_(), v = c ? c.get('data_ver') : null;
+  if (!v) {
+    v = String(new Date().getTime());
+    if (c) try { c.put('data_ver', v, 21600); } catch (e) { /* bỏ qua */ }
+  }
+  DATA_CACHE_.__ver = v;
+  return v;
+}
+
+/** Đổi phiên bản → mọi dữ liệu đệm cũ bị bỏ qua (tự hết hạn). */
+function Data_cacheBump_() {
+  var c = Data_cache_();
+  var v = String(new Date().getTime()) + '-' + Math.floor(Math.random() * 1000);
+  if (c) try { c.put('data_ver', v, 21600); } catch (e) { /* bỏ qua */ }
+  delete DATA_CACHE_.__ver;
+}
+
+/** Đọc giá trị JSON đã đệm (chia nhiều khóa nếu lớn). undefined nếu không có. */
+function Data_cacheGet_(key) {
+  if (DATA_FRESH_) return undefined;
+  var c = Data_cache_();
+  if (!c) return undefined;
+  try {
+    var k = 'd:' + Data_cacheVer_() + ':' + key;
+    var n = c.get(k);
+    if (!n) return undefined;
+    n = Number(n);
+    var keys = [];
+    for (var i = 0; i < n; i++) keys.push(k + ':' + i);
+    var got = c.getAll(keys), parts = [];
+    for (var j = 0; j < n; j++) { if (got[keys[j]] === undefined || got[keys[j]] === null) return undefined; parts.push(got[keys[j]]); }
+    return JSON.parse(parts.join(''));
+  } catch (e) { return undefined; }
+}
+
+function Data_cachePut_(key, value) {
+  if (DATA_FRESH_) return;
+  var c = Data_cache_();
+  if (!c) return;
+  try {
+    var k = 'd:' + Data_cacheVer_() + ':' + key;
+    var s = JSON.stringify(value), map = {}, n = 0;
+    for (var i = 0; i < s.length; i += DATA_CHUNK_) map[k + ':' + (n++)] = s.slice(i, i + DATA_CHUNK_);
+    c.putAll(map, DATA_TTL_);
+    c.put(k, String(n), DATA_TTL_);
+  } catch (e) { console.warn('Không ghi được bộ nhớ đệm ' + key + ': ' + e); }
+}
+
+/** Sửa tay trong Google Sheet → bỏ dữ liệu đệm (simple trigger, không cần cấp quyền). */
+function onEdit(e) {
+  Data_cacheBump_();
+}
+
 /* ============================ Phần 1 · Sheet I/O ============================ */
 
 function Data_ss_() {
@@ -43,6 +113,16 @@ function Data_resetCache_(name) {
 /** Đọc toàn bộ bảng một lần/lượt gọi. */
 function Data_load_(name) {
   if (DATA_CACHE_[name]) return DATA_CACHE_[name];
+  var hit = Data_cacheGet_('t:' + name);
+  if (hit) {
+    // Bản đệm chỉ dùng để đọc; ghi (Data_withLock_) luôn đọc lại Sheet nên có sheet + values thật.
+    var idx = {};
+    hit.rows.forEach(function (o) { idx[String(o[hit.pk])] = o; });
+    var ct = { name: name, sheet: null, headers: hit.headers, col: hit.col, pk: hit.pk, rows: hit.rows, index: idx,
+      values: null, lastRow: hit.lastRow, lastCol: hit.lastCol, cached: true };
+    DATA_CACHE_[name] = ct;
+    return ct;
+  }
   var sh = Data_sheet_(name);
   var lastRow = Math.max(sh.getLastRow(), APP.HEADER_ROW);
   var lastCol = sh.getLastColumn();
@@ -67,6 +147,7 @@ function Data_load_(name) {
   var t = { name: name, sheet: sh, headers: headers, col: col, pk: pk, rows: rows, index: index,
     values: values, lastRow: lastRow, lastCol: lastCol };
   DATA_CACHE_[name] = t;
+  Data_cachePut_('t:' + name, { headers: headers, col: col, pk: pk, rows: rows, lastRow: lastRow, lastCol: lastCol });
   return t;
 }
 
@@ -211,11 +292,15 @@ function Data_nextId_(name) {
 function Data_withLock_(fn) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(APP.LOCK_TIMEOUT_MS)) throw AppError_('LOCK');
+  DATA_FRESH_ = true;
   try {
     Data_resetCache_();
     return fn();
   } finally {
     SpreadsheetApp.flush();
+    Data_cacheBump_();
+    DATA_FRESH_ = false;
+    Data_resetCache_();
     lock.releaseLock();
   }
 }

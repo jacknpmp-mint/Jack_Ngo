@@ -70,9 +70,9 @@ function Activity_log_(user, action, table, recordId, before, after, note) {
  */
 function Activity_list_(p) {
   p = p || {};
-  var ss = Data_ss_();
-  if (!ss.getSheetByName(APP.LOG_SHEET)) return { rows: [], total: 0 };
-  var rows = Data_all_(APP.LOG_SHEET);
+  var rows;
+  try { rows = Data_all_(APP.LOG_SHEET); }   // có bộ nhớ đệm → không cần mở Sheet để kiểm tra
+  catch (e) { if (e && e.appCode === 'STRUCTURE') return { rows: [], total: 0 }; throw e; }
   if (p.table) rows = rows.filter(function (r) { return r.Table_name === p.table; });
   if (p.id) rows = rows.filter(function (r) { return String(r.Record_id) === String(p.id); });
   if (p.recordIds) {
