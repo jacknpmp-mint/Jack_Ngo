@@ -7,6 +7,7 @@
  *  - Xem trước mã PK (không cấp số); số chính thức vẫn cấp lúc Lưu (Data_nextId_).
  *  - Bản ghi cha + giá trị tính sẵn để form tự điền cột phụ thuộc khi chọn FK.
  *  - Không thêm cột nào vào Google Sheet.
+ *  - v2.7: cặp tiền USD ↔ VND quy đổi hai chiều theo APP.FX_USD_VND (FORM_FX_PAIRS, Form_fxSync_).
  */
 
 /** Cột "nên có" thêm vào cờ Thiếu dữ liệu (ngoài các cột từng bắt buộc). Ví dụ: LSB_project: ['Contract_USD', 'PM_id']. */
@@ -17,6 +18,18 @@ var FORM_CALC_EXTRA = {
   LSB_payment_plan: { Payment_VND: { type: 'mul', src: 'Payment_USD', by: 'FX_USD_VND' } },
   LSB_paid: { Paid_VND: { type: 'mul', src: 'Paid_USD', by: 'FX_USD_VND' } },
   LSB_cost: { Cost_VND: { type: 'mul', src: 'Cost_USD', by: 'FX_USD_VND' } }
+};
+
+/**
+ * v2.7: cặp tiền nhập linh động — nhập USD hoặc VND, ô còn lại tự quy đổi theo APP.FX_USD_VND.
+ * Ô vừa sửa quyết định: chỉ USD đổi → VND tính lại; chỉ VND đổi → USD tính lại; một ô trống → tính từ ô kia;
+ * cả hai cùng đổi → giữ nguyên cả hai (cho phép số khác tỷ giá).
+ */
+var FORM_FX_PAIRS = {
+  LSB_project: [['Contract_USD', 'Contract_VND']],
+  LSB_payment_plan: [['Payment_USD', 'Payment_VND']],
+  LSB_paid: [['Paid_USD', 'Paid_VND']],
+  LSB_cost: [['Cost_USD', 'Cost_VND']]
 };
 
 var FORM_POLICY_DONE_ = false;
@@ -38,6 +51,43 @@ function Form_applyPolicy_() {
         c.note = (c.note ? c.note + ' · ' : '') + 'để trống → tự tính = ' + calc[c.name].src + ' × tỷ giá (APP.' + calc[c.name].by + ')';
       }
     });
+    (FORM_FX_PAIRS[t] || []).forEach(function (pair) {
+      SCHEMA[t].columns.forEach(function (c) {
+        var i = pair.indexOf(c.name);
+        if (i < 0) return;
+        c.fx = { side: i === 0 ? 'usd' : 'vnd', pair: pair[1 - i] };
+        c.note = 'nhập USD hoặc VND — ô còn lại tự quy đổi theo tỷ giá ' + Number(APP.FX_USD_VND).toLocaleString('en-US') + ' (APP.FX_USD_VND)';
+      });
+    });
+  });
+}
+
+/** Quy đổi theo tỷ giá app: USD → VND làm tròn đồng; VND → USD làm tròn cent. */
+function Form_fxConvert_(side, v) {
+  var n = Utils_num_(v), fx = Utils_num_(APP.FX_USD_VND);
+  return side === 'usd' ? Math.round(n * fx) : Math.round(n / fx * 100) / 100;
+}
+
+/** v2.7: đồng bộ cặp USD ↔ VND của bản ghi (gọi trong Record_save_, sau Record_calc_). */
+function Form_fxSync_(table, rec, old, ctx) {
+  (FORM_FX_PAIRS[table] || []).forEach(function (pair) {
+    var u = pair[0], v = pair[1];
+    var bu = Utils_isBlank_(rec[u]), bv = Utils_isBlank_(rec[v]);
+    if (bu && bv) return;
+    var cu = !old || !Utils_sameValue_(old[u], rec[u]), cv = !old || !Utils_sameValue_(old[v], rec[v]);
+    var target = null;
+    if (bu) target = u;
+    else if (bv) target = v;
+    else if (cu && !cv) target = v;
+    else if (cv && !cu) target = u;
+    if (!target) return;
+    var src = target === u ? v : u;
+    if (typeof rec[src] !== 'number') return;   // sai kiểu → để Validation báo lỗi
+    var val = Form_fxConvert_(target === v ? 'usd' : 'vnd', rec[src]);
+    if (Utils_sameValue_(rec[target], val)) return;
+    rec[target] = val;
+    ctx.warnings.push(L_(target + ' tự quy đổi = ' + src + (target === v ? ' × ' : ' ÷ ') + APP.FX_USD_VND + '.',
+      target + ' auto-converted = ' + src + (target === v ? ' × ' : ' ÷ ') + APP.FX_USD_VND + '.'));
   });
 }
 

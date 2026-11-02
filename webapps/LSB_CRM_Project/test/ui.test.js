@@ -8,7 +8,7 @@ const SRC = path.join(__dirname, '..', 'src');
 function buildIndex() {
   let html = fs.readFileSync(path.join(SRC, 'Index.html'), 'utf8');
   html = html.replace(/<\?!=\s*include\('(\w+)'\);?\s*\?>/g, (m, n) => fs.readFileSync(path.join(SRC, n + '.html'), 'utf8'));
-  html = html.replace(/<\?=\s*appName\s*\?>/g, 'LSB CRM · Project').replace(/<\?=\s*appVersion\s*\?>/g, '2.5.0');
+  html = html.replace(/<\?=\s*appName\s*\?>/g, 'LSB CRM · Project').replace(/<\?=\s*appVersion\s*\?>/g, '2.7.0');
   if (/<\?/.test(html)) throw new Error('template tag left');
   return html;
 }
@@ -24,6 +24,10 @@ window.google = { script: {
   const A = makeContext();
   const html = buildIndex();
   fs.writeFileSync(path.join(__dirname, 'index.built.html'), html);
+  // Phục vụ qua http (như Web App thật): với file:// Chromium headless đôi khi mất localStorage khi tải lại trang → ca nháp chập chờn.
+  const srv = require('http').createServer((q, r) => { r.setHeader('content-type', 'text/html; charset=utf-8'); r.end(html); });
+  await new Promise(res => srv.listen(0, '127.0.0.1', res));
+  const PAGE_URL = 'http://127.0.0.1:' + srv.address().port + '/';
   const browser = await chromium.launch();
   const results = []; let fail = 0;
   const errors = [];
@@ -37,7 +41,7 @@ window.google = { script: {
     await page.exposeFunction('__api', (a, p, l) => JSON.stringify(A.api(a, JSON.parse(p), l)));
     await page.addInitScript(SHIM);
     await page.addInitScript(() => { try { if (!localStorage.getItem('lsb.lang')) localStorage.setItem('lsb.lang', 'vi'); } catch (e) {} });
-    await page.goto('file://' + path.join(__dirname, 'index.built.html'));
+    await page.goto(PAGE_URL);
     await page.waitForSelector('.kpis', { timeout: 10000 });
     return page;
   }
@@ -47,14 +51,61 @@ window.google = { script: {
   await run('Dashboard hiển thị KPI + bảng quý + cảnh báo', async () => {
     await page.waitForSelector('#alerts');
     const t = await page.textContent('#view');
-    if (!/Hợp đồng ký 20\d\d/.test(t)) throw new Error('missing KPI');
+    if (!/Hợp đồng ký năm 20\d\d/.test(t)) throw new Error('missing KPI');
     await page.screenshot({ path: path.join(shots, '1_dashboard.png'), fullPage: true });
   });
   await run('Dashboard năm 2026 có số liệu', async () => {
     await page.selectOption('#yr', '2026');
-    await page.waitForFunction(() => /Tổng quan 2026/.test(document.querySelector('#view').textContent));
+    await page.waitForFunction(() => /Dashboard · năm 2026/.test(document.querySelector('#view').textContent));
     const t = await page.textContent('#view');
     if (!/1,680,000/.test(t)) throw new Error('no contract value');
+  });
+  await run('v2.6 Dashboard 4 tab: công nợ (cây Dự án → Lô → Đợt), sản xuất, khách hàng; đổi VND; bấm dòng → 360° tab Thanh toán', async () => {
+    await page.click('[data-dt=ar]');
+    await page.waitForSelector('text=Thu tiền theo Dự án');
+    let t = await page.textContent('#view');
+    if (!/PP-2026-002/.test(t) || !/272,000/.test(t)) throw new Error('thiếu đợt quá hạn PP-2026-002');
+    await page.click('[data-tree=open]');
+    await page.waitForSelector('.dash-tree tr.lv3');
+    t = await page.textContent('.dash-tree');
+    if (!/Chung dự án|Lô 1/.test(t) || !/PD-2026-00/.test(t)) throw new Error('cây thiếu lô / lần thu');
+    await page.screenshot({ path: path.join(shots, '10_dash_receivables.png'), fullPage: true });
+    await page.click('[data-cur=VND]');
+    await page.waitForFunction(() => /triệu ₫/.test(document.querySelector('#view').textContent));
+    await page.click('[data-cur=USD]');
+    await page.click('[data-dt=pr]');
+    await page.waitForSelector('text=Lô hàng đang sản xuất');
+    t = await page.textContent('#view');
+    if (!/Đã đến cảng/.test(t) || !/Chưa sản xuất/.test(t)) throw new Error('thiếu tình trạng lô');
+    await page.click('[data-dt=cu]');
+    await page.waitForSelector('text=Theo quốc gia');
+    t = await page.textContent('#view');
+    if (!/Pacific Cold Storage/.test(t) || !/Australia/.test(t) || !/Cold storage/.test(t)) throw new Error('thiếu khách hàng/quốc gia/ngành');
+    await page.screenshot({ path: path.join(shots, '11_dash_customers.png'), fullPage: true });
+    await page.click('[data-dt=ar]');
+    await page.waitForSelector('.dash-tree');
+    await page.click('table.tbl tr[data-go][data-tab=pay] >> nth=0');
+    await page.waitForSelector('.tab.active[data-t=pay]');
+    await page.click('[data-route=dashboard]');
+    await page.waitForSelector('[data-dt=ov]');
+    await page.click('[data-dt=ov]');
+    await page.waitForSelector('#alerts');
+  });
+  await run('v2.7: bảng Quá hạn có cột Mã DA + Phải thu (VND) + Còn lại (VND); số VND không đổi theo nút USD/VND', async () => {
+    await page.click('[data-dt=ar]');
+    await page.waitForSelector('table.dash-due');
+    const head = await page.$$eval('table.dash-due >> nth=0', t => t[0].querySelector('thead').textContent);
+    if (!/Due_day\s*Mã DA/.test(head) || !/Phải thu \(VND\)/.test(head) || !/Còn lại \(VND\)/.test(head)) throw new Error('header ' + head);
+    const row = await page.$$eval('table.dash-due tbody tr', tr => tr.map(r => [...r.children].map(td => td.textContent.trim())).find(c => c.join(' ').includes('PP-2026-002')));
+    if (!row) throw new Error('không thấy PP-2026-002');
+    if (row[1] !== 'LSB-26-PCS' || row[7] !== '17,472,000,000' || row[8] !== '7,072,000,000') throw new Error(JSON.stringify(row));
+    await page.click('[data-cur=VND]');
+    await page.waitForFunction(() => /triệu ₫/.test(document.querySelector('table.dash-due thead').textContent));
+    const row2 = await page.$$eval('table.dash-due tbody tr', tr => tr.map(r => [...r.children].map(td => td.textContent.trim())).find(c => c.join(' ').includes('PP-2026-002')));
+    if (row2[8] !== '7,072,000,000') throw new Error('VND đổi theo nút: ' + row2[8]);
+    await page.screenshot({ path: path.join(shots, '12_due_vnd.png'), fullPage: true });
+    await page.click('[data-cur=USD]');
+    await page.click('[data-dt=ov]');
   });
   await run('Danh sách dự án → mở Dự án 360°', async () => {
     await page.click('[data-route=projects]');
@@ -126,6 +177,35 @@ window.google = { script: {
     await page.waitForTimeout(300);
     if (await page.inputValue('input[name=Payment_USD]') !== '90000') throw new Error('ghi đè giá trị nhập tay');
     await page.click('.modal .x');
+  });
+  await run('v2.7: form nhập VND → USD tự quy đổi; sửa USD → VND tính lại; % → USD → VND; lưu đúng', async () => {
+    await page.click('[data-route=projects]');
+    await page.waitForSelector('table.tbl');
+    await page.click('text=PCS Brisbane Cold Store');
+    await page.waitForSelector('#tabs .tabs');
+    await page.click('.tab[data-t=cost]');
+    await page.click('[data-add=LSB_cost]');
+    await page.waitForSelector('.modal');
+    await page.fill('input[name=Cost_VND]', '1300000');
+    await page.waitForFunction(() => document.querySelector('input[name=Cost_USD]').value === '50');
+    await page.fill('input[name=Cost_USD]', '60');
+    await page.waitForFunction(() => document.querySelector('input[name=Cost_VND]').value === '1560000');
+    await page.fill('input[name=Cost_VND]', '1600000');
+    await page.waitForFunction(() => document.querySelector('input[name=Cost_USD]').value === '61.54');
+    await page.fill('input[name=Vendor]', 'FX UI');
+    await page.click('[data-a=save]');
+    await page.waitForSelector('.modal', { state: 'detached' });
+    const c = A.api('record.list', { table: 'LSB_cost', filter: { eq: { Vendor: 'FX UI' } } }).data.rows[0];
+    if (c.Cost_USD !== 61.54 || c.Cost_VND !== 1600000) throw new Error(JSON.stringify(c));
+    await page.evaluate(() => Object.keys(localStorage).filter(k => k.indexOf('lsb.draft') === 0).forEach(k => localStorage.removeItem(k)));
+    await page.click('.tab[data-t=pay]');
+    await page.click('[data-add=LSB_payment_plan]');
+    await page.waitForSelector('.modal');
+    await page.fill('.pct-wrap input[name=Payment_pct]', '10');
+    await page.waitForFunction(() => document.querySelector('input[name=Payment_USD]').value === '168000' &&
+      document.querySelector('input[name=Payment_VND]').value === String(168000 * 26000));
+    await page.click('.modal .x');
+    await page.evaluate(() => Object.keys(localStorage).filter(k => k.indexOf('lsb.draft') === 0).forEach(k => localStorage.removeItem(k)));
   });
   await run('Nháp: đóng form / bấm ra ngoài / tải lại trang không mất dữ liệu; Bỏ nháp; Lưu xong xóa nháp', async () => {
     await page.click('[data-route=projects]');
@@ -317,7 +397,7 @@ window.google = { script: {
   await vp.exposeFunction('__api', (a, p, l) => JSON.stringify(V.api(a, JSON.parse(p), l)));
   await vp.addInitScript(SHIM);
   await vp.addInitScript(() => { try { localStorage.setItem('lsb.lang', 'vi'); } catch (e) {} });
-  await vp.goto('file://' + path.join(__dirname, 'index.built.html'));
+  await vp.goto(PAGE_URL);
   await vp.waitForSelector('.kpis');
   await run('Viewer: ẩn nút thêm, ẩn Nhật ký, form chỉ xem', async () => {
     if (await vp.isVisible('[data-route=activity]')) throw new Error('activity visible');
@@ -330,7 +410,7 @@ window.google = { script: {
   await sp.exposeFunction('__api', (a, p, l) => JSON.stringify(S.api(a, JSON.parse(p), l)));
   await sp.addInitScript(SHIM);
   await sp.addInitScript(() => { try { localStorage.setItem('lsb.lang', 'vi'); } catch (e) {} });
-  await sp.goto('file://' + path.join(__dirname, 'index.built.html'));
+  await sp.goto(PAGE_URL);
   await run('Email lạ: màn hình "Không vào được ứng dụng"', async () => {
     await sp.waitForSelector('text=chưa có trong LSB_Staff');
   });
@@ -340,7 +420,7 @@ window.google = { script: {
   ep.on('pageerror', e => errors.push('en pageerror: ' + e.message));
   await ep.exposeFunction('__api', (a, p, l) => JSON.stringify(E.api(a, JSON.parse(p), l)));
   await ep.addInitScript(SHIM);
-  await ep.goto('file://' + path.join(__dirname, 'index.built.html'));
+  await ep.goto(PAGE_URL);
   await run('v2.5: lần đầu mở bằng trình duyệt tiếng Anh → giao diện EN', async () => {
     await ep.waitForSelector('text=Overview');
     if (await ep.textContent('#lang') !== 'VN') throw new Error('mặc định không phải EN');
@@ -351,6 +431,7 @@ window.google = { script: {
     if (errors.length) throw new Error(errors.join(' | '));
   });
   await browser.close();
+  srv.close();
   console.log(results.join('\n'));
   console.log(`\n${results.length - fail} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

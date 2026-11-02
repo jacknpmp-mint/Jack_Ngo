@@ -4,6 +4,7 @@
  *   badge/status · kpis · progress · table · tabs · info grid · toast · modal · confirm
  *   formModal (form tự sinh từ SCHEMA) · activityList · trang danh mục & nhật ký dùng chung.
  *   v2.4: nháp form (Draft) · tự điền cột phụ thuộc (UI.AUTOFILL) · mã dự kiến · cờ Thiếu dữ liệu.
+ *   v2.7: cặp USD ↔ VND quy đổi hai chiều khi gõ (fxSync).
  *   v2.5: chuỗi giao diện song ngữ L(vi, en); nhãn bảng/cột theo App.tlabel / App.clabel.
  */
 var UI = {};
@@ -246,7 +247,7 @@ UI.autofill = function (table, ctl) {
   }
   function calcAll() {
     ctl.cols.forEach(function (c) {
-      if (!c.calc || !ctl.canAuto(c.name)) return;
+      if (!c.calc || c.fx || !ctl.canAuto(c.name)) return;   // cặp USD↔VND do fxSync (formModal) xử lý
       var val = UI.calcValue(c, ctl.values());
       ctl.set(c.name, val === null ? '' : val, true);
     });
@@ -457,12 +458,24 @@ UI.formModal = function (table, record, opts) {
       L('<div class="small">Khôi phục rồi Lưu sẽ ghi đè các cột trên bằng giá trị trong nháp.</div>', '<div class="small">Restoring and saving will overwrite those columns with the draft values.</div>'), 'warn');
   }
 
-  var run = canWrite ? UI.autofill(table, { cols: cols, values: collect, canAuto: canAuto, set: setField, changed: schedule }) : null;
+  /** v2.7: cặp USD ↔ VND — ô vừa đổi quyết định ô kia (quy đổi theo tỷ giá app, giống Form_fxSync_ ở server). */
+  function fxSync(name) {
+    var c = colMap[name];
+    if (!c || !c.fx) return;
+    var e = el(name), v = e ? e.value.trim() : '';
+    if (v === '') { if (canAuto(c.fx.pair)) setField(c.fx.pair, '', true); return; }
+    var n = Number(v), fx = Number((App.boot.config.consts || {}).FX_USD_VND);
+    if (!isFinite(n) || !fx) return;
+    setField(c.fx.pair, c.fx.side === 'usd' ? Math.round(n * fx) : Math.round(n / fx * 100) / 100, true);
+  }
+  function setAndSync(name, v, isAuto) { setField(name, v, isAuto); fxSync(name); }
+  var run = canWrite ? UI.autofill(table, { cols: cols, values: collect, canAuto: canAuto, set: setAndSync, changed: schedule }) : null;
   if (canWrite) {
     var onEdit = function (e) {
       if (!e.target || !e.target.name) return;
       if (e.target.dataset.auto !== undefined && e.target.value !== e.target.dataset.auto) delete e.target.dataset.auto;
       touched = true;
+      if (e.type === 'input') fxSync(e.target.name);
       schedule();
       if (e.type === 'change' || e.target.tagName !== 'SELECT') run(e.target.name);
     };

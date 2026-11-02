@@ -1,6 +1,6 @@
-# LSB CRM · Project — Web App v2.5 (Apps Script)
+# LSB CRM · Project — Web App v2.7 (Apps Script)
 
-Bản **v2.5** (= v2.4 + song ngữ VN / EN, cùng file dữ liệu) dùng để **quản lý dự án** trên file **LSB_CRM_Bidding_Project_DB_v4.3_Project.xlsx**. File này có **11 bảng / 141 cột / 16 quan hệ** (ERD ở sheet `ERD_Dictionary` và file `data/ERD_v4.3_Project.mmd`).
+Bản **v2.7** (= v2.6 + nhập tiền USD/VND linh động + cột Mã DA, VND ở bảng công nợ; v2.6 = v2.5 + Dashboard 4 tab; dùng được với file v4.3_Project và v4.5_Project — cấu trúc cột giống nhau) dùng để **quản lý dự án** trên file **LSB_CRM_Bidding_Project_DB_v4.3_Project.xlsx**. File này có **11 bảng / 141 cột / 16 quan hệ** (ERD ở sheet `ERD_Dictionary` và file `data/ERD_v4.3_Project.mmd`).
 
 | Nhóm | Bảng | Menu trong app |
 | --- | --- | --- |
@@ -10,7 +10,90 @@ Bản **v2.5** (= v2.4 + song ngữ VN / EN, cùng file dữ liệu) dùng để
 | Danh mục | LSB_Staff, LSB_Task | Nhân sự, Đầu việc chuẩn (Admin sửa) |
 | Hệ thống | LSB_Activity_log (app tự tạo) | Nhật ký thay đổi, Tài khoản |
 
-## 0. Thay đổi v2.5 — song ngữ VN / EN (cho người nước ngoài)
+## 0. Thay đổi v2.7 — nhập USD hoặc VND, bảng công nợ thêm Mã DA + VND (chốt 02/11/2026)
+
+**1. Bảng Quá hạn / Đến hạn sắp tới** (Dashboard › tab Tổng quan và tab Công nợ & thu tiền) thêm 3 cột:
+
+| Cột | Lấy từ |
+| --- | --- |
+| **Mã DA** (ngay sau Due_day) | `LSB_project.Project_code` (mã nội bộ, vd LSB-26-PCS) |
+| **Phải thu (VND)** | `Payment_VND` của đợt; trống thì = Payment_USD × 26.000 |
+| **Còn lại (VND)** | Phải thu (VND) − tổng `Paid_VND` các lần thu của đợt (lần thu trống VND thì = Paid_USD × 26.000) |
+
+Các cột USD giữ nguyên và vẫn đổi theo nút USD/VND. Hai cột VND luôn hiện **số đồng đầy đủ**, không đổi theo nút. Công thức có ghi trong mục *Cách tính* cuối tab.
+
+**2. Nhập linh động USD hoặc VND**, ô còn lại tự quy đổi theo tỷ giá app `APP.FX_USD_VND` (26.000, sửa trong `01_Config.gs`). Áp dụng cho 4 cặp:
+- Contract_USD ↔ Contract_VND (Dự án)
+- Payment_USD ↔ Payment_VND (Kế hoạch thanh toán)
+- Paid_USD ↔ Paid_VND (Tiền đã thu)
+- Cost_USD ↔ Cost_VND (Chi phí)
+
+Quy tắc **ô vừa sửa quyết định**:
+- Gõ USD → VND tính lại ngay; gõ VND → USD tính lại ngay (USD làm tròn cent, VND làm tròn đồng).
+- Muốn giữ **cả hai số khác tỷ giá** (vd đã thu VND theo tỷ giá ngân hàng): sửa ô thứ hai **sau cùng**. App không ghi đè ô vừa gõ, và server giữ nguyên khi cả hai cùng đổi.
+- Để trống một bên khi lưu → server tự quy đổi từ bên kia. Dữ liệu cũ đã có đủ USD và VND không bị đổi.
+- Mọi số liệu tổng hợp (KPI, công nợ, kiểm tra vượt đợt) vẫn tính theo **USD**.
+
+**Cập nhật từ v2.6 lên v2.7: dán đè 7 file, không có file mới, không đổi Sheet.**
+
+| # | File | Loại | Thay đổi |
+| --- | --- | --- | --- |
+| 1 | `Dashboard.html` | HTML | Bảng Quá hạn / Đến hạn: cột Mã DA, Phải thu (VND), Còn lại (VND); thêm mục *Cách tính* |
+| 2 | `04_Project.gs` | Tập lệnh | `Project_board_()` trả thêm Payment_VND (`vnd`) của đợt và Paid_VND của lần thu |
+| 3 | `10_Form.gs` | Tập lệnh | `FORM_FX_PAIRS`, `Form_fxSync_()` (quy đổi hai chiều khi lưu), ghi chú ô tiền |
+| 4 | `Data.gs` | Tập lệnh | `Record_save_` gọi `Form_fxSync_` (trước và sau hook nghiệp vụ) |
+| 5 | `Components.html` | HTML | Form: gõ USD/VND là quy đổi ngay (`fxSync`) |
+| 6 | `11_I18n.gs` | Tập lệnh | Ghi chú tiếng Anh của 8 ô tiền |
+| 7 | `01_Config.gs` | Tập lệnh | `VERSION: '2.7.0'` |
+
+Dùng clasp thì chạy `clasp push` (đẩy đủ 25 file) rồi `clasp deploy -i <mã triển khai>`, xem `HUONG_DAN_CLASP.md`.
+
+## 0-v2.6. Thay đổi v2.6 — Dashboard 4 tab (đã duyệt theo bản mẫu 25/10/2026)
+
+**Cập nhật từ v2.5 lên v2.6 — chỉ dán đè 4 file (không có file mới, không đổi Sheet):**
+
+| # | File trong Apps Script | Loại | Thay đổi |
+| --- | --- | --- | --- |
+| 1 | `Dashboard.html` | HTML | **Viết lại** trang Dashboard: 4 tab, bộ lọc, USD/VND, cây Dự án → Lô → Đợt, kiểm tra dữ liệu |
+| 2 | `04_Project.gs` | Tập lệnh | Thêm hàm `Project_board_()`; `Project_dashboard_()` trả thêm `board` (dữ liệu cho 4 tab). Các hàm khác giữ nguyên |
+| 3 | `Styles.html` | HTML | Thêm khối CSS `Dashboard 4 tab (v2.6)` ngay trước `Mobile` |
+| 4 | `01_Config.gs` | Tập lệnh | Chỉ đổi `VERSION: '2.6.0'` (để kiểm tra đã triển khai đúng bản) |
+
+Sau khi dán: **Triển khai → Quản lý triển khai → ✏ → Phiên bản: Phiên bản mới → Triển khai**. Chân menu trái và trang *Tài khoản* phải hiện **2.6.0**.
+
+Không đổi: các file còn lại (`02_Router`, `03_Auth`, `05_Customer`, `06_Bidding`, `07_Quotation`, `08_Activity`, `09_User`, `10_Form`, `11_I18n`, `Data`, `Error`, `Notification`, `Utils`, `Validation`, `appsscript.json`, `Components`, `Customer`, `Bidding`, `Index`, `JS`, `Project`).
+
+**Nội dung Dashboard v2.6**
+
+- **Bộ lọc** (đầu trang): Năm (có *Tất cả*) · Quý · Khách hàng · Trạng thái dự án · Quốc gia · nút **USD / VND** (VND = USD × 26.000, hiển thị triệu ₫ / tỷ ₫). Đổi tab, bộ lọc, tiền tệ, cửa sổ ngày → vẽ lại ngay, không tải lại; chỉ đổi Năm mới gọi server. Tab, tiền tệ, cửa sổ ngày được nhớ trên trình duyệt.
+- **Tab Tổng quan (BGĐ)**: hợp đồng ký / đã thu trong kỳ, còn phải thu, quá hạn, đến hạn N ngày; chi phí trong kỳ, biên LN dự kiến / thực tế, sản lượng tấn, tấn đang sản xuất; **biểu đồ dòng tiền theo tháng** (kế hoạch thu theo Due_day vs đã thu theo Payment_day); danh sách quá hạn + đến hạn; **Cảnh báo** (chuông vẫn mở tới đây); *Bảng theo quý* cũ thu gọn ở cuối.
+- **Tab Công nợ & thu tiền (Kế toán)**: KPI; **Kiểm tra dữ liệu** (lần thu trỏ đợt không tồn tại, kế hoạch ≠ giá trị HĐ, Payment_pct × HĐ ≠ Payment_USD, chi phí > HĐ, Tonnage_Actual ≠ tổng tấn các lô); đợt **quá hạn**; đợt **đến hạn** với nút 7 / 14 / 30 / 60 ngày và cột *Hồ sơ cần* (Required_docs); **cây Dự án → Lô hàng → Đợt → từng lần thu** (đợt không gắn lô nằm ở nhánh *Chung dự án*).
+- **Tab Sản xuất & giao hàng (PM)**: số lô theo tình trạng; bảng **lô đang sản xuất** (Start_Fab, số ngày đã SX, ETD_plan, còn bao nhiêu ngày / trễ, giá trị đợt thu gắn lô).
+- **Tab Khách hàng & thị trường (Sales)**: doanh số HĐ ký trong kỳ theo khách hàng (đã thu, còn nợ, quá hạn); biểu đồ theo **quốc gia** và theo **ngành**.
+- **Bấm một dòng** → mở Dự án 360° đúng tab (*Thanh toán* hoặc *Lô hàng*); dòng khách hàng → Lead 360°.
+- Mỗi khối có mục **Cách tính** ghi rõ bảng / cột dùng để tính.
+
+**Quy ước tính (đã chốt)**
+
+| Nội dung | Cách tính |
+| --- | --- |
+| Số theo kỳ (Năm/Quý) | HĐ ký theo `Contract_day`; đã thu theo `LSB_paid.Payment_day`; chi phí theo `LSB_cost.Invoice_code`; tấn đã xuất theo `ETD_actual` — giống sheet Dashboard trong file |
+| Số tại hôm nay | Còn phải thu = Contract_USD − tổng đã thu; quá hạn = Balance của đợt `Pay_status` = Overdue; đến hạn = đợt Open/Partial có Due_day trong N ngày tới |
+| Trạng thái đợt | Đúng công thức cột `Pay_status`: Paid (thu đủ) → Overdue (quá Due_day) → Partial → Open; app tính lại từ dữ liệu gốc |
+| Tình trạng lô (shipment không có cột trạng thái) | Chưa sản xuất (chưa Start_Fab) → Đang sản xuất (Start_Fab ≤ hôm nay, chưa Completed_Fab) → Chờ xuất (có Completed_Fab, chưa ETD_actual) → Đang vận chuyển (có ETD_actual, chưa tới ETA_actual) → Đã đến cảng (ETA_actual ≤ hôm nay; trống thì ETD_actual + 14) |
+| Chi phí thực tế | `Cost_USD` có `Cost_status` = Invoiced hoặc Paid; Planned hiện riêng |
+| Biên LN | `Grossmargin_EST` / `Grossmargin_Actual` người dùng nhập, bình quân theo giá trị HĐ |
+| Quốc gia / ngành / tên khách | Quốc gia `LSB_Customer.Nation`; tên và ngành lấy từ `LSB_Lead` qua `LSB_Customer.Lead_id` |
+
+**Nghiệm thu v2.6 (bước 18–22)**
+
+18. Trang *Tài khoản* hiện **2.6.0**. Dashboard có 4 tab.
+19. Tab *Công nợ*: khối *Kiểm tra dữ liệu* liệt kê đúng các điểm lệch của file thật (vd `PD-2026-002` trỏ `PP-2026-002` không tồn tại). Bấm *Mở tất cả* → thấy PJ-2026-001 → Lô 1 → đợt PP-2026-001 (Paid) → lần thu PD-2026-001.
+20. Bấm **VND** → số đổi sang triệu ₫; bấm **7 / 60 ngày** → danh sách đến hạn đổi theo.
+21. Tab *Sản xuất*: lô SH-2026-001 ở *Đã đến cảng*. Tab *Khách hàng*: PT. Trimulia Bangun Persada · Indonesia · EPC Main Contractor.
+22. Bấm một dòng đợt → mở Dự án 360° ở tab *Thanh toán*. Bấm **EN** → toàn bộ Dashboard chuyển tiếng Anh.
+
+## 0-v2.5. Thay đổi v2.5 — song ngữ VN / EN (cho người nước ngoài)
 
 - **Nút VN / EN** ở thanh trên cùng (cạnh chuông). Lựa chọn được nhớ trên trình duyệt. Lần đầu mở: trình duyệt tiếng Việt → VN, ngôn ngữ khác → EN.
 - **Dịch toàn bộ phần đang chạy**:
@@ -128,7 +211,7 @@ File **sửa** ở v2.3: `01_Config`, `05_Customer`, `06_Bidding`, `07_Quotation
 
 > Đã cài v2.1/v2.2 trên một Sheet khác? Tạo Sheet mới từ file v4.3_Project, dán lại toàn bộ 23 file, rồi *Quản lý triển khai → Chỉnh sửa → Phiên bản mới*.
 
-## 2. Nghiệm thu (8 bước v2.3 + 6 bước v2.4 + 3 bước v2.5)
+## 2. Nghiệm thu (v2.3 → v2.7)
 
 | # | Thao tác | Kết quả đúng |
 | --- | --- | --- |
@@ -149,6 +232,10 @@ File **sửa** ở v2.3: `01_Config`, `05_Customer`, `06_Bidding`, `07_Quotation
 | 15 | Bấm **EN** trên thanh trên cùng | Menu: Dashboard · Leads & Customers · Projects · Staff · Standard tasks · Change log · Account; trang đang mở chuyển tiếng Anh; nút đổi thành **VN** |
 | 16 | Ở EN: Projects → + Add project → chỉ chọn Customer_id, gõ Status = Closed → Add | Nhãn ô *Project name* (kèm `Project_name`); lỗi tại ô Status: *a new project cannot be Closed* |
 | 17 | Tải lại trang (F5), rồi bấm **VN** | Vẫn ở EN sau khi tải lại; bấm VN về tiếng Việt |
+| 18 | Dashboard › tab Công nợ & thu tiền › bảng **Quá hạn** | Có cột Mã DA (vd LSB-26-PCS) sau Due_day; Phải thu (VND), Còn lại (VND) là số đồng đầy đủ; bấm nút VND thì 2 cột này không đổi |
+| 19 | Dự án 360° › Chi phí › + Chi phí: gõ **Cost_VND** = 1300000 | Cost_USD tự hiện 50; gõ Cost_USD = 60 → Cost_VND thành 1560000 |
+| 20 | Cùng form: gõ Cost_VND = 1600000 (sửa sau cùng) → Lưu | Lưu Cost_USD 61.54 và Cost_VND 1600000 |
+| 21 | Tab Thanh toán › Ghi nhận thu tiền: xóa Paid_USD, gõ Paid_VND → Lưu | Paid_USD tự quy đổi; toast báo "Paid_USD tự quy đổi = Paid_VND ÷ 26000" |
 
 ## 3. Quy tắc app
 
@@ -159,7 +246,8 @@ File **sửa** ở v2.3: `01_Config`, `05_Customer`, `06_Bidding`, `07_Quotation
 - Tự điền:
   - Due_day = Start + số ngày chuẩn; Done → Done_day (không sớm hơn ngày bắt đầu).
   - Shipment_no tăng dần; Payment_USD = % × Contract_USD.
-  - Contract_VND = USD × 26000 (`APP.FX_USD_VND`); ETA = ETD + 14 (`APP.TRANSIT_DAYS`). Giá trị tự tính được tính lại khi nguồn đổi, trừ khi bạn đã sửa tay.
+  - Tiền: nhập USD **hoặc** VND, ô kia tự quy đổi theo `APP.FX_USD_VND` = 26000; ô vừa sửa quyết định, sửa cả hai thì giữ cả hai (v2.7 — HĐ, kế hoạch thanh toán, đã thu, chi phí).
+  - ETA = ETD + 14 (`APP.TRANSIT_DAYS`). Giá trị tự tính được tính lại khi nguồn đổi, trừ khi bạn đã sửa tay.
 - Cảnh báo (vẫn lưu): giá trị ngoài Lists, tổng % thanh toán > 100%, đã thu vượt đợt.
 - Dashboard / 360° **tính lại từ dữ liệu gốc**, không phụ thuộc sheet Dashboard.
 
@@ -196,6 +284,8 @@ node test/backend.test.js && node test/ui.test.js
 
 ## 5. Kiểm thử
 
+- v2.7: `test/backend.test.js` **58/58 ca pass** (1 ca cũ chỉnh theo quy tắc *ô vừa sửa quyết định*, +2 ca: chỉ nhập VND → USD quy đổi cho HĐ / đợt / đã thu / chi phí, VND nhập tay thắng %, kiểm tra vượt đợt dùng USD đã quy đổi, sai kiểu vẫn báo lỗi; board có Project_code, Payment_VND, Paid_VND). `test/ui.test.js` **25/25 ca pass, 3 lần chạy liên tiếp** (+2 ca: bảng Quá hạn có Mã DA + 2 cột VND không đổi theo nút; form gõ VND → USD, USD → VND, sửa sau cùng giữ cả hai, % → USD → VND). **Đã tìm ra nguyên nhân ca *Nháp* chập chờn từ v2.6**: test mở trang bằng `file://`, khi tải lại Chromium headless đôi khi mất localStorage (không có lệnh xóa nào từ app; qua http 28/28 lần đều giữ nháp). Test nay chạy qua `http://127.0.0.1`, giống Web App thật.
+- v2.6: `test/backend.test.js` **56/56 ca pass** (+2 ca: dữ liệu `board` của Dashboard trên fixture; smoke test trên **dữ liệu thật v4.5_Project** — PP-2026-001 Paid, PD-2026-002 trỏ đợt không tồn tại vẫn trả về để báo lỗi, ngành lấy từ Lead). `test/ui.test.js` **23/23 ca pass** (+1 ca: 4 tab, cây Dự án → Lô → Đợt, đổi VND, tình trạng lô, khách hàng/quốc gia/ngành, bấm dòng → Dự án 360° tab Thanh toán). Ca *Nháp* (có từ v2.4) thỉnh thoảng hết thời gian chờ trong môi trường kiểm thử rồi kéo theo các ca sau; chạy lại thì đạt — không liên quan Dashboard.
 - v2.5: `test/backend.test.js` **54/54 ca pass** (+2 ca: lỗi / cảnh báo / thông báo / danh sách chọn / kiểm tra cấu trúc bằng EN khi gửi `lang=en`, mặc định vẫn VN; từ điển phủ đủ 11 bảng / 141 cột / mọi ghi chú tiếng Việt). `test/ui.test.js` **22/22 ca pass** (+2 ca: nút EN → menu, trang, form, ghi chú, lỗi server tiếng Anh, nhớ sau khi tải lại, về VN; trình duyệt tiếng Anh mở lần đầu → EN). Ngoài ra đã quét chế độ EN trên mọi trang, tab, form: không còn chữ Việt ngoài dữ liệu người dùng.
 - v2.4: `test/backend.test.js` **52/52 ca pass** (46 ca v2.3, trong đó 3 ca chỉnh theo hành vi mới, + 6 ca v2.4: chính sách bắt buộc, lưu chỉ với FK + vẫn chặn sai kiểu/FK/unique/ngày ngược, mã dự kiến không cấp số, bản ghi cha cho tự điền, VND tự tính, cờ + lọc Thiếu dữ liệu). `test/ui.test.js` **20/20 ca pass** (+4 ca: mã dự kiến + tự điền, nháp đóng/bấm ra ngoài/tải lại/bỏ nháp/lưu xong xóa, nháp sửa khi bản ghi bị đổi + hết hạn 7 ngày, badge + lọc).
 - v2.3: `test/backend.test.js`: **46/46 ca pass**. Chạy trên fixture 11 sheet, kèm 2 ca smoke test trên **dữ liệu thật v4.3_Project** (Admin ST-001, cấu trúc khớp, Dự án 360° và Lead 360° chạy). Bao gồm kiểm tra: module thầu tắt kể cả khi bật cờ, `Quotation_LSB-Code` không trùng, cột tự tính, lookups chỉ gồm bảng có trong Database.

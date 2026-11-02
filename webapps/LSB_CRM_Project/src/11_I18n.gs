@@ -98,6 +98,15 @@ var I18N_COLUMNS = {
 
 /** Ghi chú cột tiếng Anh theo 'Bảng.Cột' (tiếng Việt lấy từ note trong 01_Config.gs). */
 var I18N_NOTES_EN = {
+  // v2.7: cặp tiền nhập linh động
+  'LSB_project.Contract_USD': 'enter USD or VND — the other is converted at the app rate (APP.FX_USD_VND)',
+  'LSB_project.Contract_VND': 'enter USD or VND — the other is converted at the app rate (APP.FX_USD_VND)',
+  'LSB_payment_plan.Payment_USD': 'enter USD or VND — the other is converted at the app rate (APP.FX_USD_VND)',
+  'LSB_payment_plan.Payment_VND': 'enter USD or VND — the other is converted at the app rate (APP.FX_USD_VND)',
+  'LSB_paid.Paid_USD': 'enter USD or VND — the other is converted at the app rate (APP.FX_USD_VND)',
+  'LSB_paid.Paid_VND': 'enter USD or VND — the other is converted at the app rate (APP.FX_USD_VND)',
+  'LSB_cost.Cost_USD': 'enter USD or VND — the other is converted at the app rate (APP.FX_USD_VND)',
+  'LSB_cost.Cost_VND': 'enter USD or VND — the other is converted at the app rate (APP.FX_USD_VND)',
   'LSB_Lead.Owner_id': 'Sales owner',
   'LSB_Lead.Lead_website': 'Company website URL',
   'LSB_Lead.Year': 'auto from Created_day', 'LSB_Lead.Quarter': 'auto from Created_day',
@@ -109,7 +118,6 @@ var I18N_NOTES_EN = {
   'LSB_project.Project_owner': 'project owner / investor',
   'LSB_project.Project_Maincons': 'main contractor',
   'LSB_project.Project_Consultant': 'consultant / designer',
-  'LSB_project.Contract_VND': 'leave blank → auto = Contract_USD × exchange rate (APP.FX_USD_VND)',
   'LSB_project.Tonnage_EST': 'planned steel tonnage per contract',
   'LSB_project.Tonnage_Actual': 'actual steel tonnage',
   'LSB_project.Grossmargin_EST': 'planned gross margin % (0.15 = 15%)',
@@ -138,10 +146,7 @@ var I18N_NOTES_EN = {
   'LSB_payment_plan.Shipping_id': 'optional — milestone linked to a shipment',
   'LSB_payment_plan.Payment_pct': '% of contract value',
   'LSB_payment_plan.PP_revision': 'payment plan revision (1, 2…)',
-  'LSB_payment_plan.Payment_VND': 'leave blank → auto = Payment_USD × exchange rate (APP.FX_USD_VND)',
-  'LSB_paid.Paid_VND': 'leave blank → auto = Paid_USD × exchange rate (APP.FX_USD_VND)',
   'LSB_paid.Year': 'auto from Payment_day', 'LSB_paid.Quarter': 'auto from Payment_day',
-  'LSB_cost.Cost_VND': 'leave blank → auto = Cost_USD × exchange rate (APP.FX_USD_VND)',
   'LSB_cost.Invoice_code': 'invoice date/code — currently a date column, source of Year/Quarter',
   'LSB_cost.Year': 'auto from Invoice_code', 'LSB_cost.Quarter': 'auto from Invoice_code',
   'LSB_Staff.Staff_id': 'ST-001, auto-generated',

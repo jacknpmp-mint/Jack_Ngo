@@ -242,7 +242,7 @@ function Project_dashboard_(year) {
 
   years[year] = true;
   return {
-    year: year, quarters: Q, metrics: m, bidding: bidding,
+    year: year, quarters: Q, metrics: m, bidding: bidding, board: Project_board_(plans),
     years: Object.keys(years).map(Number).sort(function (a, b) { return b - a; }),
     snapshot: {
       projectsByStatus: byStatus,
@@ -252,6 +252,52 @@ function Project_dashboard_(year) {
       overduePlans: open.filter(function (p) { return p.Status_calc === 'Overdue'; }).length,
       overdueTasks: overdueTasks
     }
+  };
+}
+
+/**
+ * v2.6: dữ liệu gọn cho Dashboard 4 tab (Tổng quan · Công nợ · Sản xuất · Khách hàng).
+ * Trình duyệt tự lọc (kỳ, khách hàng, trạng thái, quốc gia), đổi USD/VND và cửa sổ ngày mà không gọi lại server.
+ * Đợt thanh toán mang sẵn Collected/Balance/Pay_status tính lại như cột công thức trong Sheet.
+ */
+function Project_board_(plans) {
+  var leads = Utils_indexBy_(Data_all_('LSB_Lead'), 'Lead_id');
+  var paidRows = Data_all_('LSB_paid');
+  return {
+    today: Utils_today_(),
+    fx: APP.FX_USD_VND,
+    customers: Data_all_('LSB_Customer').map(function (c) {
+      var l = leads[c.Lead_id] || {};
+      return { id: c.Customer_id, lead: c.Lead_id, name: c.Company_name || l.Company_name || c.Customer_id,
+        nation: c.Nation || l.Nation || '', seg: l.Industry_segment || '' };   // ngành chỉ có ở LSB_Lead
+    }),
+    projects: Data_all_('LSB_project').map(function (p) {
+      return { id: p.Project_id, cus: p.Customer_id, code: p.Project_code, name: p.Project_name || p.Project_id,
+        status: p.Status, cday: p.Contract_day, usd: Utils_num_(p.Contract_USD),
+        tEst: Utils_num_(p.Tonnage_EST), tAct: Utils_num_(p.Tonnage_Actual),
+        gmE: Utils_isBlank_(p.Grossmargin_EST) ? null : Utils_num_(p.Grossmargin_EST),
+        gmA: Utils_isBlank_(p.Grossmargin_Actual) ? null : Utils_num_(p.Grossmargin_Actual) };
+    }),
+    shipments: Data_all_('LSB_shipment').map(function (s) {
+      return { id: s.Shipping_id, pj: s.Project_id, no: s.Shipment_no, code: s.Shipment_code,
+        t: Utils_num_(s.Quantity_ton), cPlan: s.Container_qty_plan, sFab: s.Start_Fab, cFab: s.Completed_Fab,
+        etdP: s.ETD_plan, etdA: s.ETD_actual,
+        etaA: s.ETA_actual || (s.ETD_actual ? Utils_addDays_(s.ETD_actual, APP.TRANSIT_DAYS) : '') };
+    }),
+    plans: plans.map(function (p) {
+      return { id: p.PaymentPlan_id, pj: p.Project_id, sh: p.Shipping_id || '', code: p.Payment_code,
+        pct: Utils_isBlank_(p.Payment_pct) ? null : Utils_num_(p.Payment_pct), usd: Utils_num_(p.Payment_USD),
+        vnd: Utils_isBlank_(p.Payment_VND) ? null : Utils_num_(p.Payment_VND),   // v2.7: cột VND bảng công nợ
+        docs: p.Required_docs, due: p.Due_day, rev: p.PP_revision,
+        col: p.Collected_calc, bal: Math.max(0, p.Balance_calc), st: p.Status_calc };
+    }),
+    paid: paidRows.map(function (x) {
+      return { id: x.Paid_id, pp: x.PaymentPlan_id, inv: x.Invoice_no, usd: Utils_num_(x.Paid_USD), day: x.Payment_day,
+        vnd: Utils_isBlank_(x.Paid_VND) ? null : Utils_num_(x.Paid_VND) };
+    }),
+    costs: Data_all_('LSB_cost').map(function (c) {
+      return { pj: c.Project_id, usd: Utils_num_(c.Cost_USD), day: c.Invoice_code, st: c.Cost_status };
+    })
   };
 }
 

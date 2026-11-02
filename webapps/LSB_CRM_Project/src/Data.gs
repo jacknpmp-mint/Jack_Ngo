@@ -312,8 +312,10 @@ function Record_save_(table, input, user) {
 
     var ctx = { user: user, isNew: isNew, old: old, warnings: [] };
     Record_calc_(def, merged, old, ctx);
+    Form_fxSync_(table, merged, old, ctx);   // v2.7: nhập USD hoặc VND, ô kia tự quy đổi
     if (hooks.beforeSave) hooks.beforeSave(merged, ctx);
     Record_calc_(def, merged, old, ctx);   // v2.4: hook có thể vừa điền cột nguồn (vd Payment_USD từ %)
+    Form_fxSync_(table, merged, old, ctx);
     Error_throwIfErrors_(Validation_validate_(table, merged, ctx));
 
     if (isNew) merged[def.pk] = Data_nextId_(table);

@@ -17,7 +17,7 @@
 
 var APP = {
   NAME: 'LSB CRM · Project',
-  VERSION: '2.5.0',
+  VERSION: '2.7.0',
   SCHEMA_VERSION: 'v4.3_Project',
   // Để trống nếu script gắn (bound) vào chính Google Sheet dữ liệu.
   // Nếu dùng script độc lập, dán ID của Google Sheet vào đây.

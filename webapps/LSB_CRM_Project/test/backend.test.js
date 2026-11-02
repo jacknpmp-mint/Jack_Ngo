@@ -98,6 +98,16 @@ t('dashboard.get năm 2026: số liệu theo quý', () => {
   ok(d.years.includes(2026));
   ok(d.snapshot.receivableUSD > 0);
 });
+t('v2.6 dashboard.get → board: đợt có Collected/Balance/Pay_status, khách có quốc gia + ngành từ Lead, lô có mốc ngày', () => {
+  const b = okRes(makeContext().api('dashboard.get', { year: 2026 })).board;
+  eq(b.fx, 26000); ok(/^\d{4}-\d{2}-\d{2}$/.test(b.today), 'today');
+  eq(b.customers[0], { id: 'CU-001', lead: 'LD-2026-001', name: 'Pacific Cold Storage (mẫu)', nation: 'Australia', seg: 'Cold storage' });
+  const pp = b.plans.find(x => x.id === 'PP-2026-002');
+  eq([pp.sh, pp.usd, pp.col, pp.bal, pp.st], ['SH-2026-001', 672000, 400000, 272000, 'Overdue']);
+  const s1 = b.shipments.find(x => x.id === 'SH-2026-001');
+  eq([s1.sFab, s1.cFab, s1.etdA, s1.etaA], ['2026-05-05', '2026-06-20', '2026-06-28', '2026-07-18']);
+  eq(b.projects[0].usd, 1680000); eq(b.paid.length, 2); eq(b.costs.length, 1);
+});
 t('customer.list + lead360', () => {
   const A = makeContext();
   const l = okRes(A.api('customer.list', {}));
@@ -267,13 +277,15 @@ t('module thầu tắt (bảng không có trong Database) → API thầu trả M
 
 
 /* ---------------- v2.2 · lược đồ v4.3 ---------------- */
-t('cột calc: VND = USD × 26000, ETA = ETD + 14; tính lại khi đổi nguồn, giữ giá trị sửa tay', () => {
+t('cột calc: VND = USD × 26000, ETA = ETD + 14; v2.7: ô vừa sửa quyết định, sửa cả hai thì giữ cả hai', () => {
   const A = makeContext();
   const q = okRes(A.api('record.save', { table: 'LSB_project', record: { Customer_id: 'CU-001', Project_name: 'C1', Status: 'Kick-off', Contract_USD: 100 } })).record;
   eq(q.Contract_VND, 2600000);
   eq(okRes(A.api('record.save', { table: 'LSB_project', record: { Project_id: q.Project_id, Contract_USD: 200 } })).record.Contract_VND, 5200000, 'tính lại');
-  okRes(A.api('record.save', { table: 'LSB_project', record: { Project_id: q.Project_id, Contract_VND: 5000000 } }));
-  eq(okRes(A.api('record.save', { table: 'LSB_project', record: { Project_id: q.Project_id, Contract_USD: 300 } })).record.Contract_VND, 5000000, 'giữ giá trị sửa tay');
+  eq(okRes(A.api('record.save', { table: 'LSB_project', record: { Project_id: q.Project_id, Contract_VND: 5000000 } })).record.Contract_USD, 192.31, 'sửa VND → USD quy đổi');
+  eq(okRes(A.api('record.save', { table: 'LSB_project', record: { Project_id: q.Project_id, Contract_USD: 300 } })).record.Contract_VND, 7800000, 'sửa USD → VND quy đổi');
+  const both = okRes(A.api('record.save', { table: 'LSB_project', record: { Project_id: q.Project_id, Contract_USD: 400, Contract_VND: 10000000 } })).record;
+  eq([both.Contract_USD, both.Contract_VND], [400, 10000000], 'sửa cả hai → giữ cả hai');
   const s = okRes(A.api('record.save', { table: 'LSB_shipment', record: { Project_id: 'PJ-2026-001', ETD_plan: '2026-10-01', ETD_actual: '2026-10-03' } })).record;
   eq([s.ETA_plan, s.ETA_actual], ['2026-10-15', '2026-10-17']);
   const p = okRes(A.api('record.save', { table: 'LSB_project', record: { Customer_id: 'CU-001', Project_name: 'C2', Status: 'Kick-off', Contract_USD: 1000 } })).record;
@@ -437,6 +449,35 @@ t('v2.5: từ điển phủ đủ — mọi bảng/cột có nhãn VN+EN, mọi 
   ok(Object.values(i.notesEn).every(x => !VI_RE.test(x)));
 });
 
+/* ---------------- v2.7: nhập USD hoặc VND; cột VND + Project_code cho bảng công nợ ---------------- */
+t('v2.7: nhập chỉ VND → USD tự quy đổi (HĐ, kế hoạch thanh toán, đã thu, chi phí); sai kiểu vẫn báo lỗi', () => {
+  const A = makeContext();
+  const pj = okRes(A.api('record.save', { table: 'LSB_project', record: { Customer_id: 'CU-001', Contract_VND: 2600000000 } }));
+  eq([pj.record.Contract_USD, pj.record.Contract_VND], [100000, 2600000000]);
+  ok(pj.warnings.some(w => /Contract_USD tự quy đổi = Contract_VND ÷ 26000/.test(w)), JSON.stringify(pj.warnings));
+  const pp = okRes(A.api('record.save', { table: 'LSB_payment_plan', record: { Project_id: pj.record.Project_id, Payment_pct: 0.5, Payment_VND: 520000000 } })).record;
+  eq([pp.Payment_USD, pp.Payment_VND], [20000, 520000000], 'VND nhập tay thắng % (USD đã có trước hook)');
+  const pp2 = okRes(A.api('record.save', { table: 'LSB_payment_plan', record: { Project_id: pj.record.Project_id, Payment_pct: 0.3 } })).record;
+  eq([pp2.Payment_USD, pp2.Payment_VND], [30000, 780000000], 'chỉ % → USD → VND');
+  const pd = okRes(A.api('record.save', { table: 'LSB_paid', record: { PaymentPlan_id: pp.PaymentPlan_id, Paid_VND: 650000000 } }, 'en'));
+  eq(pd.record.Paid_USD, 25000);
+  ok(pd.warnings.some(w => /exceeds milestone/.test(w)), 'kiểm tra vượt đợt dùng USD đã quy đổi: ' + JSON.stringify(pd.warnings));
+  ok(pd.warnings.some(w => /Paid_USD auto-converted = Paid_VND ÷ 26000/.test(w)));
+  eq(okRes(A.api('record.save', { table: 'LSB_cost', record: { Project_id: pj.record.Project_id, Cost_VND: 1234567 } })).record.Cost_USD, 47.48);
+  errRes(A.api('record.save', { table: 'LSB_cost', record: { Project_id: pj.record.Project_id, Cost_VND: 'abc' } }), 'VALIDATION');
+  const d = okRes(A.api('app.bootstrap'));
+  const c = d.config.tables.LSB_paid.columns.find(x => x.name === 'Paid_VND');
+  eq(c.fx, { side: 'vnd', pair: 'Paid_USD' }); ok(/nhập USD hoặc VND/.test(c.note));
+});
+t('v2.7: board có Project_code, Payment_VND, Paid_VND cho bảng Quá hạn / Đến hạn', () => {
+  const A = makeContext();
+  const b = okRes(A.api('dashboard.get', { year: 2026 })).board;
+  eq(b.projects.find(p => p.id === 'PJ-2026-001').code, 'LSB-26-PCS');
+  const pp = b.plans.find(p => p.id === 'PP-2026-002');
+  eq([pp.usd, pp.vnd], [672000, 17472000000]);
+  ok(b.paid.every(x => 'vnd' in x));
+});
+
 /* ---------------- Smoke test trên dữ liệu thật v4.3_Project (test/data_real.json) ---------------- */
 const fs = require('fs');
 if (fs.existsSync(require('path').join(__dirname, 'data_real.json'))) {
@@ -456,6 +497,12 @@ if (fs.existsSync(require('path').join(__dirname, 'data_real.json'))) {
     const p = okRes(A.api('project.get360', { id: 'PJ-2026-001' }));
     eq([p.quotation.linked, p.quotation.code, p.customer.Customer_id], [false, '25B561', 'CU-001']);
     eq(okRes(A.api('customer.lead360', { id: 'LD-2026-001' })).projects.length, 1);
+  });
+  t('[v4.5_Project thật] Dashboard board: Paid PP-2026-001, lần thu PD-2026-002 trỏ đợt không tồn tại vẫn được trả về để báo lỗi', () => {
+    const b = okRes(R().api('dashboard.get', { year: 2026 })).board;
+    eq(b.plans.map(x => [x.id, x.st]), [['PP-2026-001', 'Paid']]);
+    ok(b.paid.some(x => x.id === 'PD-2026-002' && x.pp === 'PP-2026-002'), 'PD-2026-002');
+    eq(b.customers[0].seg, 'EPC Main Contractor');
   });
 }
 

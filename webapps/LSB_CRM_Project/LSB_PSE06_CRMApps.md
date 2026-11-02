@@ -1,6 +1,6 @@
 # LSB_PSE06_CRMApps — Bàn giao context dự án LSB CRM / Bidding / Project
 
-*Cập nhật: 25/10/2026 (lần 7 — **Web App v2.5 = v2.4 + song ngữ VN/EN**, giao `LSB_PSE06_CRMApps_v2.5.zip`; test mô phỏng 54/54 backend + 22/22 UI, **chưa chạy trên Google thật**). Lần 6: v2.4 (nháp form, mã dự kiến, bỏ bắt buộc). Lần 5: phỏng vấn yêu cầu v2.4. Lần 4: 30/09/2026 (Web App v2.3 chỉ quản lý dự án, DB v4.3_Project). Mở session mới: đính kèm file này + `LSB_PSE06_CRMApps_v2.3.zip` + `LSB_CRM_Bidding_Project_DB_v4.3_Project.xlsx`.*
+*Cập nhật: 02/11/2026 (lần 8 — **Web App v2.7** = v2.6 (Dashboard 4 tab, bản trong skill mth-webapp-making `examples/lsb_v2.6`) + nhập tiền USD/VND linh động + bảng Quá hạn / Đến hạn thêm Mã DA + 2 cột VND; giao `LSB_PSE06_CRMApps_v2.7.zip` + `LSB_WebApp_v2.7_clasp.zip`; test 58/58 backend + 25/25 UI (3 lần), **chưa chạy trên Google thật**). Lần 7: **Web App v2.5 = v2.4 + song ngữ VN/EN**, giao `LSB_PSE06_CRMApps_v2.5.zip`; test mô phỏng 54/54 backend + 22/22 UI, **chưa chạy trên Google thật**). Lần 6: v2.4 (nháp form, mã dự kiến, bỏ bắt buộc). Lần 5: phỏng vấn yêu cầu v2.4. Lần 4: 30/09/2026 (Web App v2.3 chỉ quản lý dự án, DB v4.3_Project). Mở session mới: đính kèm file này + `LSB_PSE06_CRMApps_v2.3.zip` + `LSB_CRM_Bidding_Project_DB_v4.3_Project.xlsx`.*
 
 ## 1. Mục tiêu
 
@@ -58,6 +58,18 @@ Cách sửa xlsx: sửa trực tiếp XML của sheet (không lưu qua openpyxl)
 
 **v2.5 — song ngữ (chốt 25/10):** dịch toàn bộ phần đang chạy (giao diện + lỗi/cảnh báo server + cảnh báo Dashboard) · nút VN/EN trên thanh trên cùng, nhớ theo trình duyệt, lần đầu theo ngôn ngữ trình duyệt · nhãn ô thân thiện VN/EN kèm tên cột gốc · giá trị danh mục giữ tiếng Anh. File mới `11_I18n.gs` (L_, nhãn bảng/cột, ghi chú EN); trình duyệt gửi `lang` thứ 3 vào `api(action, payload, lang)`; menu Sheet theo `Session.getActiveUserLocale()`. Module thầu (tắt) chưa dịch.
 
+**v2.7 (02/11/2026) — chốt qua phỏng vấn:**
+
+| Hạng mục | Quyết định |
+| --- | --- |
+| Bảng Quá hạn / Đến hạn sắp tới | Cột riêng **Mã DA** (`Project_code`) ngay sau Due_day; thêm **Phải thu (VND)** = Payment_VND (trống → USD × tỷ giá) và **Còn lại (VND)** = Phải thu VND − Σ Paid_VND (trống → Paid_USD × tỷ giá); 2 cột VND không đổi theo nút USD/VND |
+| Nhập tiền linh động | 4 cặp Contract / Payment / Paid / Cost USD ↔ VND; **tỷ giá cố định** `APP.FX_USD_VND` = 26.000 |
+| Hai chiều | **Ô vừa sửa quyết định** (gõ USD → VND tính lại, gõ VND → USD tính lại); sửa cả hai → giữ cả hai; trống một bên → server quy đổi |
+
+Đã làm: `10_Form.gs` (FORM_FX_PAIRS, Form_fxSync_), `Data.gs` (gọi fxSync trước/sau hook), `Components.html` (fxSync khi gõ; calcAll bỏ qua cặp tiền), `04_Project.gs` (board: vnd của đợt và lần thu), `Dashboard.html` (3 cột + Cách tính), `11_I18n.gs` (ghi chú EN), `01_Config.gs` 2.7.0. Đẩy GitHub `webapps/LSB_CRM_Project/`.
+Test: tìm ra nguyên nhân ca *Nháp* chập chờn từ v2.6 — test mở `file://`, Chromium headless đôi khi mất localStorage khi tải lại (app không xóa; qua http 28/28 giữ nháp) → test UI nay chạy qua `http://127.0.0.1`.
+Script ID dự án đang chạy (từ người dùng) nằm trong `.clasp.json` của gói clasp (không đưa lên GitHub).
+
 **Trạng thái:** v2.4 xong trong mô phỏng (52/52 backend, 20/20 UI Chromium). **Cần:** dán vào Apps Script và nghiệm thu bước 9–14 trên Google thật. Rủi ro còn lại: nháp dùng localStorage trong iframe của Apps Script (`*.googleusercontent.com`) — trình duyệt chặn lưu trữ bên thứ ba / ẩn danh thì không có nháp (form vẫn lưu bình thường).
 
 ## 3. Quyết định đã chốt (tích lũy)
@@ -80,6 +92,8 @@ Cách sửa xlsx: sửa trực tiếp XML của sheet (không lưu qua openpyxl)
 | Kỳ báo cáo | Năm lịch | 22/09 |
 | Form nhập (v2.4) | Nháp trên trình duyệt, ghi Sheet khi bấm Lưu; PK tự sinh; FK điền theo ngữ cảnh + tự điền cột phụ thuộc; bắt buộc chỉ PK + FK; validation giữ nguyên; cờ "Thiếu dữ liệu" tự tính | 25/10 |
 | Bàn giao v2.4 | Chỉ zip | 25/10 |
+| Tiền USD/VND (v2.7) | Nhập 1 bên, bên kia tự quy đổi theo tỷ giá cố định 26.000; ô vừa sửa quyết định | 02/11 |
+| Bảng công nợ (v2.7) | Thêm cột Mã DA + Phải thu (VND) + Còn lại (VND) | 02/11 |
 | Song ngữ (v2.5) | Toàn bộ; nút VN/EN nhớ theo trình duyệt; nhãn cột thân thiện; danh mục giữ tiếng Anh | 25/10 |
 | Cấp mã PK (v2.4) | Hiện mã dự kiến khi mở form, cấp chính thức lúc Lưu; khác mã dự kiến → báo mã thật | 25/10 |
 | Nháp (v2.4) | localStorage; 1 nháp Thêm mới/bảng/người + nháp Sửa theo mã; 7 ngày; bản ghi bị đổi → cảnh báo, không tự khôi phục | 25/10 |
@@ -164,7 +178,8 @@ File dự kiến chạm tới (xác nhận sau khi đọc code): `Components.htm
 
 | Sản phẩm | Trạng thái |
 | --- | --- |
-| `LSB_PSE06_CRMApps_v2.5.zip` → `LSB_WebApp_v2.5/` (src 25 file, tools, test, HUONG_DAN_CAI_DAT.md) | **Bản mới nhất** — chờ dán + nghiệm thu (bước 9–17) |
+| `LSB_PSE06_CRMApps_v2.7.zip` → `LSB_WebApp_v2.7/` (src 25 file, tools, test, HUONG_DAN_CAI_DAT.md, CHANGED_FILES.md) + `LSB_WebApp_v2.7_clasp.zip` | **Bản mới nhất** — chờ đẩy (clasp) + nghiệm thu bước 18–21 |
+| `LSB_PSE06_CRMApps_v2.5.zip`, v2.6 (skill examples) | Thay bằng v2.7 |
 | `LSB_PSE06_CRMApps_v2.4.zip` | Thay bằng v2.5 |
 | `webapp/LSB_WebApp_v2.3/` | Đang vận hành thật (thay bằng v2.4 sau nghiệm thu) |
 | `webapp/LSB_WebApp_v2.2/` | Bản gộp 16 bảng (có module thầu + bộ test thầu) — dùng nếu quay lại file gộp |
@@ -178,7 +193,7 @@ File dự kiến chạm tới (xác nhận sau khi đọc code): `Components.htm
 
 ## 9. Việc tiếp theo
 
-1. **Ưu tiên:** dán v2.5 (HUONG_DAN mục 0: 2 file mới `10_Form`, `11_I18n` + 17 file sửa) → Phiên bản mới → nghiệm thu bước 9–17; xác nhận/đổi các phương án mặc định ở mục 2b (FK bắt buộc, danh mục, mặc định trạng thái, cột tự điền, `FORM_NEED_EXTRA`).
+1. **Ưu tiên:** đẩy v2.7 bằng clasp (`HUONG_DAN_CLASP.md`: clone sao lưu → push → thử /dev → deploy) → nghiệm thu bước 18–21 (và 9–17 nếu chưa làm); xác nhận/đổi các phương án mặc định ở mục 2b (FK bắt buộc, danh mục, mặc định trạng thái, cột tự điền, `FORM_NEED_EXTRA`).
 2. Cài Web App + nghiệm thu theo `HUONG_DAN_CAI_DAT.md`; thêm email thật làm Admin; gửi ảnh nếu lỗi.
 3. Xác nhận `Invoice_code` (ngày hay mã hóa đơn) → sửa file + `01_Config.gs`.
 4. Còn lại của mục 6: sheet Dashboard trong file, Huong_dan (v3.1), phạm vi dropdown Incoterm/Project_status, dữ liệu mẫu trùng.
