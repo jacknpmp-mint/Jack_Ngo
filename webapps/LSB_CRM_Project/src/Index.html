@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><?= appName ?></title>
+  <?!= include('Styles'); ?>
+</head>
+<body>
+  <!-- Index.html — Khung ứng dụng: thanh điều hướng, thanh trên, vùng hiển thị trang.
+       Menu sinh theo Database: mỗi mục khai báo data-tables (bảng cần có) và data-module (nếu thuộc module);
+       App.buildMenu() (JS.html) ẩn mục có bảng không nằm trong SCHEMA (01_Config.gs) và ẩn nhóm rỗng.
+       v2.5: chữ tĩnh có data-en (bản tiếng Anh) — App.applyLang() đổi theo nút VN/EN (#lang). -->
+  <div class="app" id="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><b>LSB CRM</b><span data-en="Lucky Steel Building · Project management">Lucky Steel Building · Quản lý dự án</span></div>
+      <nav id="nav">
+        <div class="nav-group"><h6 data-en="Overview">Tổng quan</h6>
+          <a class="nav-item" data-route="dashboard"><span class="ico">▦</span>Dashboard</a>
+        </div>
+        <div class="nav-group"><h6 data-en="Customers">Khách hàng</h6>
+          <a class="nav-item" data-route="customers" data-tables="LSB_Lead,LSB_Customer"><span class="ico">◉</span><span data-en="Leads &amp; Customers">Lead &amp; Khách hàng</span></a>
+          <a class="nav-item" data-route="bidding" data-module="QUOTATION" data-tables="LSB_Quotation"><span class="ico">✎</span><span data-en="Quotations &amp; Bidding">Báo giá &amp; Đấu thầu</span></a>
+        </div>
+        <div class="nav-group"><h6 data-en="Delivery">Triển khai</h6>
+          <a class="nav-item" data-route="projects" data-tables="LSB_project"><span class="ico">▣</span><span data-en="Projects">Dự án</span></a>
+        </div>
+        <div class="nav-group"><h6 data-en="Catalogs">Danh mục</h6>
+          <a class="nav-item" data-route="catalog" data-table="LSB_Staff" data-tables="LSB_Staff"><span class="ico">☺</span><span data-en="Staff">Nhân sự</span></a>
+          <a class="nav-item" data-route="catalog" data-table="LSB_Task" data-tables="LSB_Task"><span class="ico">☰</span><span data-en="Standard tasks">Đầu việc chuẩn</span></a>
+        </div>
+        <div class="nav-group" id="nav-system"><h6 data-en="System">Hệ thống</h6>
+          <a class="nav-item" data-route="activity" data-cap="activity"><span class="ico">⟲</span><span data-en="Change log">Nhật ký thay đổi</span></a>
+          <a class="nav-item" data-route="account"><span class="ico">⚙</span><span data-en="Account">Tài khoản</span></a>
+        </div>
+      </nav>
+      <div class="sidebar-foot"><?= appName ?> · v<?= appVersion ?></div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <button class="menu-btn" id="menu-btn" aria-label="Mở menu" data-en-title="Open menu">☰</button>
+        <h1 id="page-title">Đang tải…</h1>
+        <span class="busy hidden" id="busy"></span>
+        <button class="lang-btn" id="lang" type="button">EN</button>
+        <button class="bell" id="bell" title="Cảnh báo" data-en-title="Alerts">🔔<span class="dot hidden" id="bell-count">0</span></button>
+        <div class="user-chip" id="user-chip"></div>
+      </header>
+      <section class="view" id="view">
+        <div class="loading"><div class="spinner"></div><span data-en="Loading data…">Đang tải dữ liệu…</span></div>
+      </section>
+    </div>
+  </div>
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <?!= include('JS'); ?>
+  <?!= include('Components'); ?>
+  <?!= include('Dashboard'); ?>
+  <?!= include('Project'); ?>
+  <?!= include('Customer'); ?>
+  <?!= include('Bidding'); ?>
+  <script>App.start();</script>
+</body>
+</html>

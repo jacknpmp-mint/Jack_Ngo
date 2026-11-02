@@ -1,0 +1,146 @@
+<script>
+/**
+ * Customer.html — Lead & Khách hàng: danh sách (lọc trạng thái/người phụ trách) + Lead 360°
+ * (lead → đánh giá lead → báo giá / kế hoạch hành động → khách hàng → dự án).
+ * Tạo khách hàng từ lead → app tự đặt Lead_status = Converted.
+ * v2.4: badge + lọc "Thiếu dữ liệu".
+ */
+App.pages.customers = {
+  title: function () { return L('Lead & Khách hàng', 'Leads & Customers'); },
+  render: function (view, p) {
+    var f = { q: p.q || '', status: p.status || '', owner: p.owner || '', customersOnly: !!p.customersOnly, missing: !!p.missing };
+    return App.api('customer.list', f).then(function (res) {
+      var staff = App.boot.lookups.LSB_Staff || [];
+      var nCus = res.rows.filter(function (r) { return r.Customer_id; }).length;
+      view.innerHTML =
+        L('<div class="page-head"><div class="title"><h2>Lead &amp; Khách hàng</h2><div class="muted small">', '<div class="page-head"><div class="title"><h2>Leads &amp; Customers</h2><div class="muted small">') + res.total + ' lead · ' + nCus + L(' đã là khách hàng</div></div>', ' already customers</div></div>') +
+        (App.can('write') ? L('<button class="btn primary" id="add">+ Thêm lead</button>', '<button class="btn primary" id="add">+ Add lead</button>') : '') + '</div>' +
+        L('<div class="toolbar"><input id="q" class="grow" placeholder="Tìm công ty, liên hệ, quốc gia…" value="', '<div class="toolbar"><input id="q" class="grow" placeholder="Search company, contact, country…" value="') + Fmt.esc(f.q) + '">' +
+        L('<select id="status"><option value="">Mọi trạng thái</option>', '<select id="status"><option value="">All statuses</option>') + (App.boot.config.lists.Lead_status || []).map(function (s) {
+          return '<option' + (f.status === s ? ' selected' : '') + '>' + Fmt.esc(s) + '</option>'; }).join('') + '</select>' +
+        L('<select id="owner"><option value="">Mọi người phụ trách</option>', '<select id="owner"><option value="">All owners</option>') + staff.map(function (s) {
+          return '<option value="' + s.id + '"' + (f.owner === s.id ? ' selected' : '') + '>' + Fmt.esc(s.label) + '</option>'; }).join('') + '</select>' +
+        '<label class="small"><input type="checkbox" id="cus" style="width:auto"' + (f.customersOnly ? ' checked' : '') + L('> Chỉ khách hàng</label>', '> Customers only</label>') +
+        '<label class="small"><input type="checkbox" id="miss" style="width:auto"' + (f.missing ? ' checked' : '') + L('> Thiếu dữ liệu</label></div>', '> Incomplete</label></div>') +
+        UI.table([
+          { key: 'Lead_id', label: L('Mã', 'ID'), render: function (r) { return '<span class="id">' + r.Lead_id + '</span>' + UI.missingBadge('LSB_Lead', r) + (r.Customer_id ? '<div><span class="id">' + r.Customer_id + '</span></div>' : ''); } },
+          { key: 'Company_name', label: L('Công ty', 'Company'), render: function (r) { return '<b>' + Fmt.esc(r.Company_name) + '</b><div class="small muted">' + Fmt.esc([r.Nation, r.Industry_segment].filter(Boolean).join(' · ')) + '</div>'; } },
+          { key: 'Contact_name', label: L('Liên hệ', 'Contact'), render: function (r) { return Fmt.esc(r.Contact_name) + '<div class="small muted">' + Fmt.esc(r.Contact_email) + '</div>'; } },
+          { key: 'Lead_source', label: L('Nguồn', 'Source') },
+          { key: 'Owner_name', label: L('Phụ trách', 'Owner') },
+          { key: 'Created_day', label: L('Ngày tạo', 'Created'), render: function (r) { return Fmt.date(r.Created_day); } },
+          { key: 'Lead_status', label: L('Trạng thái', 'Status'), render: function (r) { return UI.status(r.Lead_status); } },
+          App.boot.config.app.modules.QUOTATION ? { key: 'Quotations', label: L('Báo giá', 'Quotations'), num: true, render: function (r) { return r.Quotations || ''; } } : null,
+          { key: 'Projects', label: L('Dự án', 'Projects'), num: true, render: function (r) { return r.Projects ? r.Projects + '<div class="small muted">' + Fmt.compact(r.Contract_USD) + ' USD</div>' : ''; } }
+        ].filter(Boolean), res.rows, { empty: L('Không có lead phù hợp', 'No matching leads'), onRow: function (r) { App.go('lead', { id: r.Lead_id }); } });
+
+      function apply() {
+        App.go('customers', { q: view.querySelector('#q').value.trim(), status: view.querySelector('#status').value,
+          owner: view.querySelector('#owner').value, customersOnly: view.querySelector('#cus').checked, missing: view.querySelector('#miss').checked }, { replace: true });
+      }
+      ['status', 'owner', 'cus', 'miss'].forEach(function (id) { view.querySelector('#' + id).onchange = apply; });
+      view.querySelector('#q').addEventListener('keydown', function (e) { if (e.key === 'Enter') apply(); });
+      var add = view.querySelector('#add');
+      if (add) add.onclick = function () {
+        App.edit('LSB_Lead', {}, { defaults: { Lead_status: 'New', Created_day: App.boot.today, Owner_id: App.boot.user.staffId },
+          onSaved: function (r) { App.go('lead', { id: r.Lead_id }); } });
+      };
+    });
+  }
+};
+
+App.pages.lead = {
+  title: function (p) { return 'Lead ' + (p.id || ''); },
+  render: function (view, p) {
+    return App.api('customer.lead360', { id: p.id }).then(function (d) {
+      var l = d.lead, c = d.customer, k = d.kpi, canW = App.can('write');
+      var reload = function () { App.go('lead', { id: l.Lead_id }, { fromHistory: true }); };
+      view.innerHTML =
+        L('<div class="page-head"><div class="title"><div class="crumb"><a data-go="customers">Lead &amp; Khách hàng</a> › ', '<div class="page-head"><div class="title"><div class="crumb"><a data-go="customers">Leads &amp; Customers</a> › ') + Fmt.esc(l.Lead_id) + '</div>' +
+        '<h2>' + Fmt.esc(l.Company_name || l.Lead_id) + ' ' + UI.status(l.Lead_status) + UI.missingBadge('LSB_Lead', l) + '</h2><div class="muted small">' +
+        Fmt.esc([l.Nation, l.Industry_segment, l.Lead_source].filter(Boolean).join(' · ')) + '</div></div>' +
+        (canW ? L('<button class="btn" id="edit">Sửa lead</button>', '<button class="btn" id="edit">Edit lead</button>') : '') + '</div>' +
+        UI.kpis((d.bidding.enabled ? [
+          { label: L('Đánh giá lead', 'Lead qualification'), value: k.qualDone + '/' + k.qualTotal, sub: L('việc đã xong', 'tasks done') },
+          { label: L('Báo giá', 'Quotations'), value: k.quotations, sub: Fmt.compact(k.quotedUSD) + ' USD' }] : []).concat([
+          { label: L('Dự án', 'Projects'), value: k.projects, tone: 'accent' },
+          { label: L('Giá trị hợp đồng', 'Contract value'), value: Fmt.usd(k.contractUSD) + ' USD' },
+          { label: L('Đã thu', 'Collected'), value: Fmt.usd(k.collectedUSD), tone: 'ok' },
+          { label: L('Còn phải thu', 'Outstanding'), value: Fmt.usd(k.outstandingUSD) }
+        ])) +
+        '<div class="row"><div class="col"><div class="card"><h3>Lead</h3>' + UI.info([
+          [L('Liên hệ', 'Contact'), Fmt.esc(l.Contact_name) + (l.Contact_title ? '<div class="small muted">' + Fmt.esc(l.Contact_title) + '</div>' : '')],
+          ['Email', l.Contact_email ? '<a href="mailto:' + Fmt.esc(l.Contact_email) + '">' + Fmt.esc(l.Contact_email) + '</a>' : ''],
+          ['Website', l.Lead_website ? '<a href="' + Fmt.esc(l.Lead_website) + '" target="_blank" rel="noopener">' + Fmt.esc(l.Lead_website) + '</a>' : ''],
+          [L('Phụ trách', 'Owner'), Fmt.esc(l.Owner_name)], [L('Ngày tạo', 'Created'), Fmt.date(l.Created_day)], [L('Năm / Quý', 'Year / Quarter'), Fmt.esc(l.Year) + ' ' + Fmt.esc(l.Quarter)]
+        ]) + '</div></div>' +
+        L('<div class="col"><div class="card"><div class="card-head"><h3>Khách hàng', '<div class="col"><div class="card"><div class="card-head"><h3>Customer') + (c ? UI.missingBadge('LSB_Customer', c) : '') + '</h3>' +
+        (c && canW ? L('<button class="btn sm" id="edit-c">Sửa</button>', '<button class="btn sm" id="edit-c">Edit</button>') : '') + '</div>' +
+        (c ? UI.info([
+          [L('Mã', 'ID'), '<span class="id">' + Fmt.esc(c.Customer_id) + '</span>'], [L('Tên', 'Name'), Fmt.esc(c.Company_name)],
+          [L('Mã số thuế', 'Tax code'), Fmt.esc(c.Tax_code)], [L('Địa chỉ', 'Address'), Fmt.esc(c.Address)], [L('Liên hệ', 'Contact'), Fmt.esc(c.Contact)],
+          [L('HĐ đầu tiên', 'First contract'), Fmt.date(c.First_contract_day)], ['Account owner', Fmt.esc(c.Account_owner_name)]
+        ]) : L('<p class="muted">Lead chưa trở thành khách hàng. Khi ký hợp đồng đầu tiên, tạo khách hàng từ lead này ', '<p class="muted">This lead is not a customer yet. When the first contract is signed, create a customer from this lead ') +
+          L('(Lead_status sẽ tự chuyển Converted).</p>', '(Lead_status will switch to Converted automatically).</p>') + (canW ? L('<button class="btn accent" id="mk-c">Tạo khách hàng</button>', '<button class="btn accent" id="mk-c">Create customer</button>') : '')) +
+        '</div></div></div>' +
+        (d.bidding.enabled ?
+          L('<div class="card"><div class="card-head"><h3>Đánh giá lead</h3>', '<div class="card"><div class="card-head"><h3>Lead qualification</h3>') + (canW ? L('<button class="btn sm primary" id="add-ql">+ Việc đánh giá</button>', '<button class="btn sm primary" id="add-ql">+ Qualification task</button>') : '') + '</div>' +
+          App.bidTaskTable(d.qualifying, { kind: false, empty: L('Chưa có việc đánh giá lead', 'No qualification tasks yet'), onChange: reload }) + '</div>' +
+          L('<div class="card"><div class="card-head"><h3>Báo giá</h3>', '<div class="card"><div class="card-head"><h3>Quotations</h3>') + (canW ? L('<button class="btn sm primary" id="add-q">+ Báo giá</button>', '<button class="btn sm primary" id="add-q">+ Quotation</button>') : '') + '</div>' +
+          UI.table([
+            { key: 'Quotation_code', label: L('Mã', 'ID'), render: function (r) { return '<span class="id">' + Fmt.esc(r.Quotation_code) + '</span><div class="small muted">' + Fmt.esc(r.Quotation_LSB_Code) + '</div>'; } },
+            { key: 'Project_name', label: L('Công trình', 'Project site') },
+            { key: 'Status', label: L('Trạng thái', 'Status'), render: function (r) { return UI.status(r.Status); } },
+            { key: 'Issue_day', label: L('Phát hành', 'Issued'), render: function (r) { return Fmt.date(r.Issue_day); } },
+            { key: 'Value_USD', label: L('Giá trị (USD)', 'Value (USD)'), num: true, render: function (r) { return Fmt.usd(r.Value_USD); } },
+            { key: 'Result', label: L('Kết quả', 'Result'), render: function (r) { return UI.status(r.Result); } }
+          ], d.quotations, { empty: L('Chưa có báo giá', 'No quotations yet'), onRow: function (r) { App.go('quotation', { id: r.Quotation_code }); } }) + '</div>' +
+          L('<div class="card"><div class="card-head"><h3>Kế hoạch hành động thầu</h3>', '<div class="card"><div class="card-head"><h3>Bid action plan</h3>') + (canW ? L('<button class="btn sm primary" id="add-a">+ Việc</button>', '<button class="btn sm primary" id="add-a">+ Task</button>') : '') + '</div>' +
+          App.bidTaskTable(d.actions, { kind: false, quotation: true, empty: L('Chưa có việc', 'No tasks yet'), onChange: reload }) + '</div>'
+          : '') +
+        L('<div class="card"><div class="card-head"><h3>Dự án</h3>', '<div class="card"><div class="card-head"><h3>Projects</h3>') + (c && canW ? L('<button class="btn sm primary" id="add-p">+ Dự án</button>', '<button class="btn sm primary" id="add-p">+ Project</button>') : '') + '</div>' +
+        UI.table([
+          { key: 'Project_id', label: L('Mã', 'ID'), render: function (r) { return '<span class="id">' + r.Project_id + '</span>'; } },
+          { key: 'Project_name', label: L('Dự án', 'Projects') },
+          { key: 'Status', label: L('Trạng thái', 'Status'), render: function (r) { return UI.status(r.Status); } },
+          { key: 'Contract_day', label: L('Ngày HĐ', 'Contract date'), render: function (r) { return Fmt.date(r.Contract_day); } },
+          { key: 'Contract_USD', label: L('HĐ (USD)', 'Contract (USD)'), num: true, render: function (r) { return Fmt.usd(r.Contract_USD); } },
+          { key: 'Collected_USD', label: L('Đã thu', 'Collected'), num: true, render: function (r) { return Fmt.usd(r.Collected_USD); } }
+        ], d.projects, { empty: L('Chưa có dự án', 'No projects yet'), onRow: function (r) { App.go('project', { id: r.Project_id }); } }) + '</div>' +
+        (App.can('activity') ? L('<div class="card"><h3>Nhật ký</h3>', '<div class="card"><h3>Change log</h3>') + UI.activityList(d.activity) + '</div>' : '');
+
+      view.querySelector('[data-go=customers]').onclick = function () { App.go('customers'); };
+      App.bindQuoteLinks(view);
+      var aq = view.querySelector('#add-ql');
+      if (aq) aq.onclick = function () {
+        App.edit('LSB_Lead_Qualifying', {}, { defaults: { Lead_id: l.Lead_id, Qual_Status: 'Not started', Assessor_id: App.boot.user.staffId,
+          Qual_Start_day: App.boot.today }, onSaved: reload });
+      };
+      var aqt = view.querySelector('#add-q');
+      if (aqt) aqt.onclick = function () {
+        App.edit('LSB_Quotation', {}, { defaults: { Lead_id: l.Lead_id, Status: 'Draft', Sales_id: l.Owner_id || App.boot.user.staffId,
+          Issue_day: App.boot.today, Revision_no: 0 }, onSaved: function (r) { App.go('quotation', { id: r.Quotation_code }); } });
+      };
+      var aa = view.querySelector('#add-a');
+      if (aa) aa.onclick = function () {
+        App.edit('LSB_Bidding_action_plan', {}, { defaults: { Lead_id: l.Lead_id, Status: 'Not started', Owner_id: App.boot.user.staffId,
+          Start_day: App.boot.today }, onSaved: reload });
+      };
+      var e1 = view.querySelector('#edit');
+      if (e1) e1.onclick = function () { App.edit('LSB_Lead', l, { onSaved: reload, onDeleted: function () { App.go('customers'); } }); };
+      var e2 = view.querySelector('#edit-c');
+      if (e2) e2.onclick = function () { App.edit('LSB_Customer', c, { onSaved: reload, onDeleted: reload }); };
+      var mk = view.querySelector('#mk-c');
+      if (mk) mk.onclick = function () {
+        App.edit('LSB_Customer', {}, { defaults: { Lead_id: l.Lead_id, Nation: l.Nation, Contact: l.Contact_name,
+          Account_owner_id: l.Owner_id, First_contract_day: App.boot.today }, onSaved: reload });
+      };
+      var ap = view.querySelector('#add-p');
+      if (ap) ap.onclick = function () {
+        App.edit('LSB_project', {}, { defaults: { Customer_id: c.Customer_id, Status: 'Kick-off', RAD_Revision: 0 },
+          onSaved: function (r) { App.go('project', { id: r.Project_id }); } });
+      };
+    });
+  }
+};
+</script>

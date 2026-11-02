@@ -1,0 +1,73 @@
+<script>
+/**
+ * Dashboard.html — Tổng hợp theo năm/quý + ảnh chụp hiện tại + cảnh báo.
+ * Dữ liệu: dashboard.get (04_Project.gs, v2.1 có thêm chỉ số thầu) và notification.list (Notification.gs).
+ */
+App.pages.dashboard = {
+  title: 'Dashboard',
+  render: function (view, p) {
+    var year = p.year || new Date().getFullYear();
+    return Promise.all([
+      App.api('dashboard.get', { year: year }),
+      App.api('notification.list', { mine: !!p.mine })
+    ]).then(function (res) {
+      var d = res[0], alerts = res[1], m = d.metrics, s = d.snapshot;
+      var margin = m.contractUSD.total ? (m.contractUSD.total - m.costUSD.total) / m.contractUSD.total : null;
+
+      var b = d.bidding;
+      var rows = [[L('Lead mới', 'New leads'), m.leads, 'n']];
+      if (b) rows = rows.concat([
+        [L('Báo giá phát hành', 'Quotations issued'), m.quotations, 'n'], [L('Giá trị báo giá (USD)', 'Quoted value (USD)'), m.quotedUSD, 'usd'],
+        [L('Thắng thầu (số)', 'Bids won (count)'), m.bidsWon, 'n'], [L('Thua thầu (số)', 'Bids lost (count)'), m.bidsLost, 'n'], [L('Giá trị thắng (USD)', 'Won value (USD)'), m.wonUSD, 'usd']]);
+      rows = rows.concat([
+        [L('Khách hàng mới', 'New customers'), m.customers, 'n'], [L('Hợp đồng ký (số)', 'Contracts signed (count)'), m.contracts, 'n'],
+        [L('Hợp đồng ký (USD)', 'Contracts signed (USD)'), m.contractUSD, 'usd'], [L('Tiền đã thu (USD)', 'Collected (USD)'), m.collectedUSD, 'usd'],
+        [L('Chi phí (USD)', 'Costs (USD)'), m.costUSD, 'usd'], [L('Tấn đã xuất', 'Tons shipped'), m.shippedTon, 't'], [L('Bài học dự án', 'Project lessons'), m.lessons, 'n']
+      ]);
+      function f(v, k) { return k === 'usd' ? Fmt.usd(v) : Fmt.num(v, k === 't' ? 1 : 0); }
+      var qtable = L('<div class="table-wrap"><table class="tbl qtable"><thead><tr><th>Chỉ số</th>', '<div class="table-wrap"><table class="tbl qtable"><thead><tr><th>Metric</th>') +
+        d.quarters.map(function (q) { return '<th class="num">' + q + '</th>'; }).join('') + L('<th class="num">Cả năm</th></tr></thead><tbody>', '<th class="num">Full year</th></tr></thead><tbody>') +
+        rows.map(function (r) {
+          return '<tr><td>' + r[0] + '</td>' + d.quarters.map(function (q) { return '<td class="num">' + f(r[1][q], r[2]) + '</td>'; }).join('') +
+            '<td class="num"><b>' + f(r[1].total, r[2]) + '</b></td></tr>';
+        }).join('') + '</tbody></table></div>';
+
+      var maxStatus = Math.max.apply(null, Object.keys(s.projectsByStatus).map(function (k) { return s.projectsByStatus[k]; }).concat([1]));
+      var statusBars = '<div class="status-bars">' + Object.keys(s.projectsByStatus).map(function (k) {
+        var n = s.projectsByStatus[k];
+        return '<div class="sb"><span>' + UI.status(k) + '</span><div class="bar ' + (k === 'Closed' ? 'ok' : '') +
+          '"><i style="width:' + (n / maxStatus * 100) + '%"></i></div><span class="right">' + n + '</span></div>';
+      }).join('') + '</div>';
+
+      var alertHtml = UI.alertList(alerts.rows, 40);
+      var bidKpis = b ? UI.kpis([
+        { label: L('Pipeline báo giá', 'Quotation pipeline'), value: Fmt.compact(b.pipelineUSD) + ' USD', sub: b.openQuotations + L(' báo giá đang chào', ' open quotations'), tone: 'accent' },
+        { label: L('Pipeline có trọng số', 'Weighted pipeline'), value: Fmt.compact(b.weightedUSD) + ' USD', sub: 'Value × Win_probability' },
+        { label: L('Tỷ lệ thắng ', 'Win rate ') + d.year, value: b.winRate === null ? '—' : Fmt.pct(b.winRate, 0), sub: m.bidsWon.total + L(' thắng / ', ' won / ') + m.bidsLost.total + ' thua' },
+        { label: L('Việc thầu trễ', 'Overdue bid tasks'), value: b.overdueBidTasks, sub: L('đánh giá lead + kế hoạch hành động', 'lead qualification + action plan'), tone: b.overdueBidTasks ? 'warn' : '' }
+      ]) : '';
+
+      view.innerHTML =
+        L('<div class="page-head"><div class="title"><h2>Tổng quan ', '<div class="page-head"><div class="title"><h2>Overview ') + d.year + L('</h2><div class="muted small">Năm lịch · số liệu tính từ dữ liệu gốc</div></div>', '</h2><div class="muted small">Calendar year · figures computed from source data</div></div>') +
+        '<select id="yr" style="width:auto">' + d.years.map(function (y) { return '<option' + (y === d.year ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></div>' +
+        UI.kpis([
+          { label: L('Hợp đồng ký ', 'Contracts signed ') + d.year, value: Fmt.compact(m.contractUSD.total) + ' USD', sub: m.contracts.total + L(' hợp đồng', ' contracts'), tone: 'accent' },
+          { label: L('Đã thu ', 'Collected ') + d.year, value: Fmt.compact(m.collectedUSD.total) + ' USD', tone: 'ok' },
+          { label: L('Chi phí ', 'Costs ') + d.year, value: Fmt.compact(m.costUSD.total) + ' USD', sub: margin === null ? '' : L('Lãi gộp ', 'Gross margin ') + Fmt.pct(margin, 1) },
+          { label: L('Công nợ phải thu', 'Receivables'), value: Fmt.compact(s.receivableUSD) + ' USD', sub: L('tất cả dự án', 'all projects') },
+          { label: L('Quá hạn thu', 'Overdue receivables'), value: Fmt.compact(s.overdueUSD) + ' USD', sub: s.overduePlans + L(' đợt', ' milestones'), tone: s.overdueUSD > 0 ? 'danger' : '' },
+          { label: L('Dự án đang chạy', 'Active projects'), value: s.activeProjects, sub: s.overdueTasks + L(' việc trễ hạn', ' overdue tasks'), tone: s.overdueTasks ? 'warn' : '' }
+        ]) + bidKpis +
+        L('<div class="row"><div class="col" style="flex:2 1 520px"><div class="card"><h3>Theo quý</h3>', '<div class="row"><div class="col" style="flex:2 1 520px"><div class="card"><h3>By quarter</h3>') + qtable + '</div></div>' +
+        L('<div class="col"><div class="card"><h3>Dự án theo trạng thái</h3>', '<div class="col"><div class="card"><h3>Projects by status</h3>') + statusBars + '</div></div></div>' +
+        L('<div class="card" id="alerts"><div class="card-head"><h3>Cảnh báo (', '<div class="card" id="alerts"><div class="card-head"><h3>Alerts (') + alerts.counts.total + ')</h3>' +
+        '<label class="small"><input type="checkbox" id="mine" style="width:auto"' + (p.mine ? ' checked' : '') + L('> Chỉ việc của tôi</label></div>', '> My items only</label></div>') + alertHtml + '</div>';
+
+      view.querySelector('#yr').onchange = function () { App.go('dashboard', { year: +this.value, mine: p.mine }); };
+      view.querySelector('#mine').onchange = function () { App.go('dashboard', { year: d.year, mine: this.checked }); };
+      UI.bindLinks(view);
+      if (p.focus === 'alerts') view.querySelector('#alerts').scrollIntoView({ behavior: 'smooth' });
+    });
+  }
+};
+</script>

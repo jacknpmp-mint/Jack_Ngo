@@ -1,0 +1,649 @@
+<script>
+/**
+ * Components.html — Thành phần giao diện dùng chung (UI.*):
+ *   badge/status · kpis · progress · table · tabs · info grid · toast · modal · confirm
+ *   formModal (form tự sinh từ SCHEMA) · activityList · trang danh mục & nhật ký dùng chung.
+ *   v2.4: nháp form (Draft) · tự điền cột phụ thuộc (UI.AUTOFILL) · mã dự kiến · cờ Thiếu dữ liệu.
+ *   v2.5: chuỗi giao diện song ngữ L(vi, en); nhãn bảng/cột theo App.tlabel / App.clabel.
+ */
+var UI = {};
+
+var STATUS_TONE = {
+  ok: ['Done', 'Paid', 'Closed', 'Converted', 'Qualified', 'Won', 'Applied', 'Y', 'Installation Completed'],
+  warn: ['In progress', 'Partial', 'Qualifying', 'Nurture', 'Negotiating', 'Invoiced', 'Engineering', 'Fabrication', 'Installation Processing'],
+  danger: ['Blocked', 'Overdue', 'Disqualified', 'Lost', 'N', 'Cancelled', 'No-bid'],
+  blue: ['Shipping', 'Kick-off', 'Submitted', 'New', 'Open', 'Planned', 'Qualify', 'Quotation']
+};
+
+UI.badge = function (text, tone) {
+  return '<span class="badge ' + (tone || '') + '">' + Fmt.esc(text) + '</span>';
+};
+UI.status = function (v) {
+  if (!v) return '';
+  for (var tone in STATUS_TONE) if (STATUS_TONE[tone].indexOf(v) >= 0) return UI.badge(v, tone);
+  return UI.badge(v);
+};
+
+UI.kpis = function (items) {
+  return '<div class="kpis">' + items.map(function (k) {
+    return '<div class="kpi ' + (k.tone || '') + '"><div class="l">' + Fmt.esc(k.label) + '</div><div class="v">' +
+      (k.html || Fmt.esc(k.value)) + '</div>' + (k.sub ? '<div class="s">' + k.sub + '</div>' : '') + '</div>';
+  }).join('') + '</div>';
+};
+
+UI.progress = function (label, value, max, tone, text) {
+  var pct = max > 0 ? Math.max(0, Math.min(100, value / max * 100)) : 0;
+  return '<div class="prog"><div class="t"><span>' + Fmt.esc(label) + '</span><span>' + (text || Math.round(pct) + '%') +
+    '</span></div><div class="bar ' + (tone || '') + '"><i style="width:' + pct.toFixed(1) + '%"></i></div></div>';
+};
+
+/**
+ * Bảng dữ liệu.
+ * cols: [{ key, label, num, render(row) → html, col (định nghĩa schema) }]
+ */
+UI.table = function (cols, rows, opts) {
+  opts = opts || {};
+  if (!rows.length) return '<div class="table-wrap"><div class="empty">' + Fmt.esc(opts.empty || L('Chưa có dữ liệu', 'No data yet')) + '</div></div>';
+  var id = 'tbl' + Math.random().toString(36).slice(2, 8);
+  var html = '<div class="table-wrap"><table class="tbl" id="' + id + '"><thead><tr>' + cols.map(function (c) {
+    return '<th class="' + (c.num ? 'num' : '') + '">' + Fmt.esc(c.label || c.key) + '</th>';
+  }).join('') + '</tr></thead><tbody>' + rows.map(function (r, i) {
+    return '<tr data-i="' + i + '" class="' + (opts.onRow ? 'click' : '') + '">' + cols.map(function (c) {
+      var v = c.render ? c.render(r) : (c.col ? Fmt.cell(c.col, r[c.key]) : Fmt.esc(r[c.key]));
+      return '<td class="' + (c.num ? 'num' : '') + '">' + (v === undefined ? '' : v) + '</td>';
+    }).join('') + '</tr>';
+  }).join('') + '</tbody></table></div>';
+  if (opts.onRow) setTimeout(function () {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('click', function (e) {
+      if (e.target.closest('a,button')) return;
+      var tr = e.target.closest('tr[data-i]');
+      if (tr) opts.onRow(rows[+tr.dataset.i]);
+    });
+  }, 0);
+  return html;
+};
+
+/** Cột bảng lấy từ schema. keys: danh sách tên cột. */
+UI.schemaCols = function (table, keys) {
+  return keys.map(function (k) {
+    var c = App.col(table, k);
+    return { key: k, label: App.clabel(table, k), col: c, num: c && c.type === 'number' };
+  });
+};
+
+UI.info = function (pairs) {
+  return '<div class="info">' + pairs.map(function (p) {
+    return '<div><div class="k">' + Fmt.esc(p[0]) + '</div><div class="v">' + (p[1] === '' || p[1] === null || p[1] === undefined ? '<span class="muted">—</span>' : p[1]) + '</div></div>';
+  }).join('') + '</div>';
+};
+
+/** Thẻ tab. tabs: [{ id, label, count, render(el) }] */
+UI.tabs = function (el, tabs, activeId) {
+  el.innerHTML = '<div class="tabs">' + tabs.map(function (t) {
+    return '<button class="tab" data-t="' + t.id + '">' + Fmt.esc(t.label) +
+      (t.count !== undefined ? '<span class="n">' + t.count + '</span>' : '') + '</button>';
+  }).join('') + '</div><div class="tab-body"></div>';
+  var body = el.querySelector('.tab-body');
+  function show(id) {
+    el.querySelectorAll('.tab').forEach(function (b) { b.classList.toggle('active', b.dataset.t === id); });
+    var t = tabs.filter(function (x) { return x.id === id; })[0] || tabs[0];
+    UI.tabs._last = t.id;
+    t.render(body);
+  }
+  el.querySelector('.tabs').addEventListener('click', function (e) {
+    var b = e.target.closest('.tab'); if (b) show(b.dataset.t);
+  });
+  show(activeId || tabs[0].id);
+};
+
+UI.toast = function (msg, tone, ms) {
+  var root = document.getElementById('toast-root');
+  var t = document.createElement('div');
+  t.className = 'toast ' + (tone || '');
+  t.textContent = msg;
+  root.appendChild(t);
+  setTimeout(function () { t.remove(); }, ms || 3500);
+};
+
+UI.modal = function (opts) {
+  var root = document.getElementById('modal-root');
+  var bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = '<div class="modal" role="dialog"><div class="modal-h"><h3>' + Fmt.esc(opts.title) +
+    L('</h3><button class="x" aria-label="Đóng">×</button></div><div class="modal-b">', '</h3><button class="x" aria-label="Close">×</button></div><div class="modal-b">') + (opts.body || '') +
+    '</div><div class="modal-f">' + (opts.footer || '') + '</div></div>';
+  root.appendChild(bg);
+  var closed = false;
+  function close() {
+    if (closed) return;
+    closed = true;
+    bg.remove(); document.removeEventListener('keydown', esc);
+    if (opts.onClose) opts.onClose();
+  }
+  function esc(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', esc);
+  bg.querySelector('.x').onclick = close;
+  // sticky (form đang nhập): bấm ra ngoài không đóng
+  if (!opts.sticky) bg.addEventListener('mousedown', function (e) { if (e.target === bg) close(); });
+  return { el: bg, close: close };
+};
+
+UI.confirm = function (msg) {
+  return new Promise(function (resolve) {
+    var m = UI.modal({ title: L('Xác nhận', 'Confirm'), body: '<p>' + Fmt.esc(msg) + '</p>',
+      footer: L('<button class="btn" data-a="no">Hủy</button><button class="btn danger" data-a="yes">Đồng ý</button>', '<button class="btn" data-a="no">Cancel</button><button class="btn danger" data-a="yes">OK</button>') });
+    m.el.querySelector('[data-a=no]').onclick = function () { m.close(); resolve(false); };
+    m.el.querySelector('[data-a=yes]').onclick = function () { m.close(); resolve(true); };
+  });
+};
+
+/* ------------------------- Form tự sinh từ SCHEMA ------------------------- */
+
+UI.fieldHtml = function (table, c, value, isNew) {
+  var id = 'f_' + c.name;
+  var req = c.required ? ' <span class="req">*</span>' : '';
+  var need = c.need ? L(' <span class="need" title="Nên bổ sung — để trống thì bản ghi có cờ Thiếu dữ liệu">•</span>', ' <span class="need" title="Recommended — if left blank the record is flagged Incomplete">•</span>') : '';
+  var v = value === undefined || value === null ? '' : value;
+  var note = App.cnote(table, c);
+  var input;
+  if (c.key === 'PK') {
+    input = '<div class="ro" data-pk>' + (isNew ? L('tự sinh khi lưu', 'generated on save') : Fmt.esc(v)) + '</div>';
+  } else if (c.key === 'FK') {
+    input = '<select id="' + id + '" name="' + c.name + '" data-ref="' + c.ref + '"></select>';
+  } else if (c.list) {
+    var dl = 'dl_' + c.name;
+    input = '<input id="' + id + '" name="' + c.name + '" list="' + dl + '" value="' + Fmt.esc(v) + '" autocomplete="off">' +
+      '<datalist id="' + dl + '">' + (App.boot.config.lists[c.list] || []).map(function (o) {
+        return '<option value="' + Fmt.esc(o) + '">'; }).join('') + '</datalist>';
+  } else if (c.type === 'date') {
+    input = '<input type="date" id="' + id + '" name="' + c.name + '" value="' + Fmt.esc(v) + '">';
+  } else if (c.pct) {
+    var pv = v === '' ? '' : Math.round(Number(v) * 10000) / 100;
+    input = '<div class="pct-wrap"><input type="number" step="any" id="' + id + '" name="' + c.name + '" value="' + pv + '"><span>%</span></div>';
+  } else if (c.type === 'number') {
+    input = '<input type="number" step="any" id="' + id + '" name="' + c.name + '" value="' + Fmt.esc(v) + '"' +
+      (c.min !== undefined ? ' min="' + c.min + '"' : '') + (c.max !== undefined ? ' max="' + c.max + '"' : '') + '>';
+  } else if (c.long) {
+    input = '<textarea id="' + id + '" name="' + c.name + '">' + Fmt.esc(v) + '</textarea>';
+  } else {
+    var type = c.format === 'email' ? 'email' : c.format === 'url' ? 'url' : 'text';
+    input = '<input type="' + type + '" id="' + id + '" name="' + c.name + '" value="' + Fmt.esc(v) + '">';
+  }
+  return '<div class="field' + (c.long ? ' full' : '') + '" data-f="' + c.name + '"><label for="' + id + '">' + Fmt.esc(App.clabel(table, c.name)) + req + need +
+    (App.clabel(table, c.name) !== c.name ? ' <span class="code">' + Fmt.esc(c.name) + '</span>' : '') +
+    '</label>' + input + (note ? '<div class="hint">' + Fmt.esc(note) + '</div>' : '') + '<div class="err"></div></div>';
+};
+
+/**
+ * Đổ lựa chọn vào ô FK:
+ *  - lô hàng / đợt thanh toán lọc theo dự án đang chọn;
+ *  - báo giá lọc theo lead đang chọn (kế hoạch hành động thầu);
+ *  - đầu việc chuẩn lọc theo giai đoạn phù hợp với bảng (TASK_PHASE_FILTER).
+ */
+UI.fillFk = function (form, sel, value) {
+  var ref = sel.dataset.ref;
+  var list = (App.boot.lookups[ref] || []).slice();
+  var projSel = form.querySelector('[name=Project_id]');
+  var projectId = projSel ? projSel.value : (form.dataset.project || '');
+  if (projectId && (ref === 'LSB_shipment' || ref === 'LSB_payment_plan')) {
+    list = list.filter(function (o) { return o.parent === projectId; });
+  }
+  var leadSel = form.querySelector('select[name=Lead_id]');
+  if (ref === 'LSB_Quotation' && leadSel && leadSel.value) {
+    list = list.filter(function (o) { return o.lead === leadSel.value; });
+  }
+  var phases = ref === 'LSB_Task' && App.boot.config.taskPhases ? App.boot.config.taskPhases[form.dataset.table] : null;
+  if (phases) list = list.filter(function (o) { return phases.indexOf(o.group) >= 0 || o.id === value; });
+  sel.innerHTML = L('<option value="">— chọn —</option>', '<option value="">— select —</option>') + list.filter(function (o) {
+    return o.active !== false || o.id === value;
+  }).map(function (o) {
+    var lbl = o.id + (o.label ? ' · ' + o.label : '') + (ref === 'LSB_payment_plan' && !projectId && o.parent ? ' (' + o.parent + ')' : '') +
+      (o.active === false ? L(' (ngưng)', ' (inactive)') : '');
+    return '<option value="' + Fmt.esc(o.id) + '"' + (o.id === value ? ' selected' : '') + '>' + Fmt.esc(lbl) + '</option>';
+  }).join('');
+  if (value && !list.some(function (o) { return o.id === value; })) {
+    sel.insertAdjacentHTML('beforeend', '<option value="' + Fmt.esc(value) + '" selected>' + Fmt.esc(value) + L(' (không có trong danh sách)</option>', ' (not in list)</option>'));
+  }
+};
+
+/**
+ * v2.4 — Tự điền cột phụ thuộc khi chọn FK (bản ghi cha lấy qua record.related).
+ * Chỉ điền ô đang trống hoặc ô app đã tự điền mà người dùng chưa sửa; `also` = cột khác kích hoạt lại quy tắc.
+ */
+UI.AUTOFILL = {
+  LSB_Customer: [{ fk: 'Lead_id', ref: 'LSB_Lead', fill: function (p) {
+    return { Nation: p.Nation, Contact: p.Contact_name, Account_owner_id: p.Owner_id }; } }],
+  LSB_Project_task: [{ fk: 'Task_id', ref: 'LSB_Task', also: ['Start_day'], fill: function (p, v) {
+    var n = Number(p.Std_duration_days);
+    return v.Start_day && n > 0 ? { Due_day: Fmt.addDays(v.Start_day, n) } : {}; } }],
+  LSB_shipment: [{ fk: 'Project_id', ref: 'LSB_project', fill: function (p) { return { Shipment_no: p.Next_shipment_no }; } }],
+  LSB_Project_handover_lesson: [{ fk: 'Project_id', ref: 'LSB_project', fill: function (p) {
+    return { Handover_day: p.Project_handover || App.boot.today }; } }],
+  LSB_payment_plan: [{ fk: 'Project_id', ref: 'LSB_project', also: ['Payment_pct'], fill: function (p, v) {
+    var c = Number(p.Contract_USD);
+    return c && v.Payment_pct !== '' && v.Payment_pct !== undefined ? { Payment_USD: Math.round(c * v.Payment_pct * 100) / 100 } : {}; } }],
+  LSB_paid: [{ fk: 'PaymentPlan_id', ref: 'LSB_payment_plan', fill: function (p) {
+    return p.Balance_calc > 0 ? { Paid_USD: Math.round(p.Balance_calc * 100) / 100 } : {}; } }]
+};
+
+/** Giá trị cột calc (cùng công thức với Record_calcValue_ ở server). null nếu thiếu nguồn. */
+UI.calcValue = function (c, v) {
+  var src = v[c.calc.src], by = (App.boot.config.consts || {})[c.calc.by];
+  if (src === '' || src === undefined || src === null || by === undefined) return null;
+  if (c.calc.type === 'mul') return isFinite(Number(src)) ? Math.round(Number(src) * Number(by)) : null;
+  if (c.calc.type === 'addDays') return Fmt.addDays(src, Number(by)) || null;
+  return null;
+};
+
+/** ctl: { cols, values(), canAuto(name), set(name, value, isAuto), changed() } → run(tên cột vừa đổi | null). */
+UI.autofill = function (table, ctl) {
+  var rules = UI.AUTOFILL[table] || [], cache = {};
+  function related(ref, id) {
+    var k = ref + '|' + id;
+    if (!cache[k]) cache[k] = App.api('record.related', { table: ref, id: id }).catch(function () { return null; });
+    return cache[k];
+  }
+  function calcAll() {
+    ctl.cols.forEach(function (c) {
+      if (!c.calc || !ctl.canAuto(c.name)) return;
+      var val = UI.calcValue(c, ctl.values());
+      ctl.set(c.name, val === null ? '' : val, true);
+    });
+  }
+  return function run(changed) {
+    calcAll();
+    var jobs = rules.filter(function (r) { return !changed || changed === r.fk || (r.also || []).indexOf(changed) >= 0; });
+    if (!jobs.length) { ctl.changed(); return Promise.resolve(); }
+    return Promise.all(jobs.map(function (r) {
+      var id = ctl.values()[r.fk];
+      return id ? related(r.ref, id).then(function (p) { return p ? { r: r, p: p } : null; }) : null;
+    })).then(function (res) {
+      res.forEach(function (x) {
+        if (!x) return;
+        var out = x.r.fill(x.p, ctl.values()) || {};
+        Object.keys(out).forEach(function (k) {
+          if (out[k] !== undefined && out[k] !== null && out[k] !== '' && ctl.canAuto(k)) ctl.set(k, out[k], true);
+        });
+      });
+      calcAll();
+      ctl.changed();
+    });
+  };
+};
+
+/**
+ * v2.4 — Nháp form trên trình duyệt (localStorage): 1 nháp thêm mới / bảng / người, nháp sửa theo mã bản ghi.
+ * Giữ 7 ngày; xóa khi Lưu thành công hoặc bấm "Bỏ nháp". Không ghi gì vào Sheet.
+ */
+var Draft = {
+  TTL_MS: 7 * 86400000,
+  PREFIX: 'lsb.draft.v1|',
+  key: function (table, id) { return Draft.PREFIX + ((App.boot && App.boot.user.email) || '') + '|' + table + '|' + (id || 'new'); },
+  get: function (table, id) {
+    try {
+      var d = JSON.parse(localStorage.getItem(Draft.key(table, id)) || 'null');
+      if (d && Date.now() - d.t <= Draft.TTL_MS) return d;
+      if (d) Draft.remove(table, id);
+    } catch (e) { /* trình duyệt chặn lưu trữ */ }
+    return null;
+  },
+  set: function (table, id, d) {
+    try { d.t = Date.now(); localStorage.setItem(Draft.key(table, id), JSON.stringify(d)); return true; } catch (e) { return false; }
+  },
+  remove: function (table, id) { try { localStorage.removeItem(Draft.key(table, id)); } catch (e) { /* bỏ qua */ } },
+  /** Xóa nháp quá hạn (gọi khi mở app). */
+  purge: function () {
+    try {
+      for (var i = localStorage.length - 1; i >= 0; i--) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf(Draft.PREFIX) !== 0) continue;
+        var d = null;
+        try { d = JSON.parse(localStorage.getItem(k)); } catch (e) { d = null; }
+        if (!d || Date.now() - d.t > Draft.TTL_MS) localStorage.removeItem(k);
+      }
+    } catch (e) { /* bỏ qua */ }
+  },
+  when: function (t) {
+    var d = new Date(t), p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return p(d.getHours()) + ':' + p(d.getMinutes()) + ' ' + p(d.getDate()) + '/' + p(d.getMonth() + 1);
+  }
+};
+
+/**
+ * Form thêm/sửa theo SCHEMA.
+ * opts: { defaults, context: { project }, title, onSubmit(data, info) → Promise, onDelete() → Promise }
+ * v2.4: mã dự kiến · nháp tự lưu + khôi phục · tự điền cột phụ thuộc · bắt buộc chỉ FK quan hệ.
+ */
+UI.formModal = function (table, record, opts) {
+  opts = opts || {};
+  var def = App.table(table);
+  var isNew = !record[def.pk];
+  var rec = {};
+  Object.keys(record).forEach(function (k) { rec[k] = record[k]; });
+  if (isNew && opts.defaults) Object.keys(opts.defaults).forEach(function (k) { if (rec[k] === undefined || rec[k] === '') rec[k] = opts.defaults[k]; });
+  var cols = def.columns.filter(function (c) { return !c.auto; });
+  var colMap = {};
+  cols.forEach(function (c) { colMap[c.name] = c; });
+  var canWrite = App.canWrite(table);
+  var draftId = isNew ? '' : rec[def.pk];
+  var body = '<div class="draft-bar hidden"></div>' +
+    '<form class="form-grid" novalidate data-table="' + table + '"' + (opts.context && opts.context.project ? ' data-project="' + Fmt.esc(opts.context.project) + '"' : '') + '>' +
+    cols.map(function (c) { return UI.fieldHtml(table, c, rec[c.name], isNew); }).join('') + '</form>' +
+    (canWrite ? '' : L('<p class="note warn">Bạn chỉ có quyền xem.</p>', '<p class="note warn">You have view-only access.</p>'));
+  var footer = (opts.onDelete && !isNew ? L('<button class="btn danger" data-a="del" style="margin-right:auto">Xóa</button>', '<button class="btn danger" data-a="del" style="margin-right:auto">Delete</button>') : '') +
+    L('<button class="btn" data-a="cancel">Đóng</button>', '<button class="btn" data-a="cancel">Close</button>') +
+    (canWrite ? '<button class="btn primary" data-a="save">' + (isNew ? L('Thêm', 'Add') : L('Lưu', 'Save')) + '</button>' : '');
+  var saved = false, touched = false, timer = null, previewId = '';
+  var m = UI.modal({ title: opts.title || ((isNew ? L('Thêm ', 'Add ') : L('Sửa ', 'Edit ')) + App.tlabel(table) + (isNew ? '' : ' · ' + rec[def.pk])), body: body, footer: footer,
+    sticky: canWrite,   // bấm ra ngoài không đóng form đang nhập
+    onClose: function () {
+      UI._flushDraft = null;
+      if (saved || !canWrite) return;
+      if (flush()) UI.toast(L('Đã lưu nháp — mở lại form ', 'Draft saved — reopen the ') + App.tlabel(table) + L(' để nhập tiếp.', ' form to continue.'), '', 4000);
+    } });
+  var form = m.el.querySelector('form');
+  var bar = m.el.querySelector('.draft-bar');
+  form.querySelectorAll('select[data-ref]').forEach(function (s) { UI.fillFk(form, s, rec[s.name] || ''); });
+  var proj = form.querySelector('select[name=Project_id]');
+  if (proj) proj.addEventListener('change', function () {
+    form.querySelectorAll('select[data-ref=LSB_shipment],select[data-ref=LSB_payment_plan]').forEach(function (s) { UI.fillFk(form, s, s.value); });
+  });
+  var leadSel = form.querySelector('select[name=Lead_id]');
+  if (leadSel) leadSel.addEventListener('change', function () {
+    form.querySelectorAll('select[data-ref=LSB_Quotation]').forEach(function (s) { UI.fillFk(form, s, s.value); });
+  });
+  if (!canWrite) form.querySelectorAll('input,select,textarea').forEach(function (i) { i.disabled = true; });
+
+  function el(name) { return form.querySelector('[name="' + name + '"]'); }
+  function collect() {
+    var data = {};
+    if (!isNew) data[def.pk] = rec[def.pk];
+    cols.forEach(function (c) {
+      if (c.key === 'PK') return;
+      var e = el(c.name);
+      if (!e) return;
+      var v = e.value.trim();
+      if (c.pct && v !== '') v = Number(v) / 100;
+      data[c.name] = v;
+    });
+    return data;
+  }
+  /** Đặt giá trị (dạng lưu: % là tỷ lệ). isAuto = app tự điền → được tính lại khi nguồn đổi. */
+  function setField(name, v, isAuto) {
+    var c = colMap[name], e = el(name);
+    if (!c || !e || e.disabled) return;
+    var shown = v === null || v === undefined ? '' : (c.pct && v !== '' ? String(Math.round(Number(v) * 10000) / 100) : String(v));
+    if (e.tagName === 'SELECT') UI.fillFk(form, e, shown); else e.value = shown;
+    if (isAuto) e.dataset.auto = shown; else delete e.dataset.auto;
+  }
+  function canAuto(name) {
+    var e = el(name);
+    return !!e && !e.disabled && (e.value === '' || (e.dataset.auto !== undefined && e.value === e.dataset.auto));
+  }
+  function setAll(data, autos) {
+    // FK cha trước (lọc danh sách lô hàng / đợt thanh toán theo dự án), rồi các ô còn lại
+    var order = ['Project_id', 'Lead_id'].filter(function (k) { return colMap[k]; })
+      .concat(cols.map(function (c) { return c.name; }).filter(function (k) { return k !== 'Project_id' && k !== 'Lead_id'; }));
+    order.forEach(function (k) {
+      if (colMap[k].key === 'PK' || !Object.prototype.hasOwnProperty.call(data, k)) return;
+      setField(k, data[k], false);
+      if (autos && autos[k] !== undefined && el(k) && el(k).value === autos[k]) el(k).dataset.auto = autos[k];
+    });
+  }
+  function autoMap() {
+    var a = {};
+    form.querySelectorAll('[data-auto]').forEach(function (e) { a[e.name] = e.dataset.auto; });
+    return a;
+  }
+  var initial = collect();
+  var base = {};
+  if (!isNew) cols.forEach(function (c) { if (c.key !== 'PK') base[c.name] = rec[c.name] === undefined || rec[c.name] === null ? '' : rec[c.name]; });
+  function dirty() { return JSON.stringify(collect()) !== JSON.stringify(initial); }
+  /** Ghi nháp ngay (nếu người dùng đã nhập và form khác ban đầu). Trả true nếu có nháp. */
+  function flush() {
+    clearTimeout(timer); timer = null;
+    if (!canWrite || saved || !touched) return false;
+    if (!dirty()) { Draft.remove(table, draftId); return false; }
+    return Draft.set(table, draftId, { data: collect(), auto: autoMap(), base: base, context: opts.context || null });
+  }
+  function schedule() { if (!canWrite || saved) return; clearTimeout(timer); timer = setTimeout(flush, 400); }
+  UI._flushDraft = flush;
+
+  function showBar(html, tone) {
+    bar.className = 'draft-bar' + (tone ? ' ' + tone : '');
+    bar.innerHTML = html;
+  }
+  function hideBar() { bar.className = 'draft-bar hidden'; bar.innerHTML = ''; }
+  function restore(d) {
+    setAll(d.data, d.auto);
+    touched = true;
+    showBar(L('Đã khôi phục bản nháp lúc ', 'Draft restored from ') + Draft.when(d.t) + L('. <button class="btn sm" data-d="drop">Bỏ nháp</button>', '. <button class="btn sm" data-d="drop">Discard draft</button>'));
+  }
+  function drop() {
+    Draft.remove(table, draftId);
+    form.querySelectorAll('[data-auto]').forEach(function (e) { delete e.dataset.auto; });
+    setAll(initial, null);
+    touched = false;
+    hideBar();
+    if (run) run(null);
+  }
+  bar.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-d]');
+    if (!b) return;
+    if (b.dataset.d === 'drop') drop();
+    if (b.dataset.d === 'restore') restore(pending);
+  });
+
+  var pending = canWrite ? Draft.get(table, draftId) : null;
+  if (pending) {
+    var conflict = [];
+    if (isNew) {
+      // nháp thêm mới của ngữ cảnh khác (FK quan hệ khác, vd dự án khác) → hỏi, không tự khôi phục
+      Object.keys(opts.defaults || {}).forEach(function (k) {
+        if (colMap[k] && colMap[k].key === 'FK' && colMap[k].required && pending.data[k] && String(pending.data[k]) !== String(opts.defaults[k])) conflict.push(k + ' = ' + pending.data[k]);
+      });
+    } else {
+      Object.keys(pending.base || {}).forEach(function (k) {
+        if (colMap[k] && String(pending.base[k]) !== String(base[k] === undefined ? '' : base[k])) conflict.push(k);
+      });
+    }
+    if (!conflict.length) restore(pending);
+    else if (isNew) showBar(L('Có bản nháp chưa lưu lúc ', 'There is an unsaved draft from ') + Draft.when(pending.t) + ' (' + Fmt.esc(conflict.join(', ')) + '). ' +
+      L('<button class="btn sm" data-d="restore">Khôi phục nháp</button> <button class="btn sm" data-d="drop">Bỏ nháp</button>', '<button class="btn sm" data-d="restore">Restore draft</button> <button class="btn sm" data-d="drop">Discard draft</button>') +
+      L('<div class="small">Nếu nhập mới ở form này, nháp cũ sẽ bị thay.</div>', '<div class="small">If you type in this form, the old draft will be replaced.</div>'), 'warn');
+    else showBar(L('Bản ghi đã được sửa trên Sheet sau khi bạn lưu nháp lúc ', 'The record was changed in the Sheet after your draft from ') + Draft.when(pending.t) + L(' (cột: ', ' (columns: ') + Fmt.esc(conflict.join(', ')) + '). ' +
+      L('<button class="btn sm" data-d="restore">Vẫn khôi phục nháp</button> <button class="btn sm" data-d="drop">Bỏ nháp</button>', '<button class="btn sm" data-d="restore">Restore draft anyway</button> <button class="btn sm" data-d="drop">Discard draft</button>') +
+      L('<div class="small">Khôi phục rồi Lưu sẽ ghi đè các cột trên bằng giá trị trong nháp.</div>', '<div class="small">Restoring and saving will overwrite those columns with the draft values.</div>'), 'warn');
+  }
+
+  var run = canWrite ? UI.autofill(table, { cols: cols, values: collect, canAuto: canAuto, set: setField, changed: schedule }) : null;
+  if (canWrite) {
+    var onEdit = function (e) {
+      if (!e.target || !e.target.name) return;
+      if (e.target.dataset.auto !== undefined && e.target.value !== e.target.dataset.auto) delete e.target.dataset.auto;
+      touched = true;
+      schedule();
+      if (e.type === 'change' || e.target.tagName !== 'SELECT') run(e.target.name);
+    };
+    form.addEventListener('input', onEdit);
+    form.addEventListener('change', onEdit);
+    run(null);
+  }
+
+  if (isNew && canWrite) {
+    var pkEl = form.querySelector('[data-pk]');
+    if (pkEl) {
+      pkEl.textContent = L('đang lấy mã…', 'getting ID…');
+      App.api('record.peekId', { table: table }).then(function (r) {
+        previewId = r.id;
+        pkEl.innerHTML = Fmt.esc(r.id) + L(' <span class="muted small">· mã dự kiến, cấp chính thức khi lưu</span>', ' <span class="muted small">· preview ID, assigned on save</span>');
+      }).catch(function () { pkEl.textContent = L('tự sinh khi lưu', 'generated on save'); });
+    }
+  }
+
+  function showErrors(list) {
+    form.querySelectorAll('.field').forEach(function (f) { f.classList.remove('has-err'); f.querySelector('.err').textContent = ''; });
+    var first = null;
+    (list || []).forEach(function (e) {
+      var f = form.querySelector('[data-f="' + e.field + '"]');
+      if (!f) return;
+      f.classList.add('has-err');
+      f.querySelector('.err').textContent = e.message;
+      first = first || f;
+    });
+    if (first) first.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  m.el.querySelector('[data-a=cancel]').onclick = m.close;
+  var save = m.el.querySelector('[data-a=save]');
+  if (save) save.onclick = function () {
+    var data = collect();
+    var missing = cols.filter(function (c) { return c.required && c.key !== 'PK' && (data[c.name] === '' || data[c.name] === undefined); })
+      .map(function (c) { return { field: c.name, message: c.key === 'FK' ? L('bắt buộc chọn', 'required') : L('bắt buộc nhập', 'required') }; });
+    if (missing.length) { showErrors(missing); return; }
+    save.disabled = true; save.textContent = L('Đang lưu…', 'Saving…');
+    opts.onSubmit(data, { previewId: previewId }).then(function () {
+      saved = true;
+      clearTimeout(timer);
+      Draft.remove(table, draftId);
+      m.close();
+    }).catch(function (err) {
+      save.disabled = false; save.textContent = isNew ? L('Thêm', 'Add') : L('Lưu', 'Save');
+      touched = true; flush();   // lưu lỗi → giữ nháp
+      if (err && err.details && err.details.length && err.details[0].field) showErrors(err.details);
+      App.fail(err);
+    });
+  };
+  var del = m.el.querySelector('[data-a=del]');
+  if (del) del.onclick = function () {
+    opts.onDelete().then(function (done) { if (done) { saved = true; Draft.remove(table, draftId); m.close(); } }).catch(App.fail);
+  };
+  return m;
+};
+
+/** Cờ "Thiếu dữ liệu" (v2.4): badge nếu bản ghi còn trống cột bắt buộc / cột nên có (`need`). */
+UI.missingBadge = function (table, r) {
+  var miss = App.missing(table, r).map(function (k) { return App.clabel(table, k); });
+  return miss.length ? L(' <span class="badge warn" title="Thiếu: ', ' <span class="badge warn" title="Missing: ') + Fmt.esc(miss.join(', ')) + L('">Thiếu dữ liệu</span>', '">Incomplete</span>') : '';
+};
+
+/** Danh sách cảnh báo (Notification.gs) — mỗi dòng có link mở dự án / báo giá / lead. */
+UI.alertList = function (rows, max) {
+  max = max || 40;
+  if (!rows.length) return L('<div class="empty">Không có cảnh báo 🎉</div>', '<div class="empty">No alerts 🎉</div>');
+  var open = { project: L('Mở dự án', 'Open project'), quotation: L('Mở báo giá', 'Open quotation'), lead: L('Mở lead', 'Open lead') };
+  return rows.slice(0, max).map(function (a) {
+    var l = a.link;
+    return '<div class="alert ' + a.level + '"><div style="flex:1"><div class="t">' + Fmt.esc(a.title) + '</div><div class="d">' +
+      Fmt.esc(a.detail) + ' · ' + Fmt.date(a.date) + '</div></div>' +
+      (l ? '<a data-link-route="' + l.route + '" data-link-id="' + Fmt.esc(l.id) + '">' + (open[l.route] || L('Mở', 'Open')) + '</a>' : '') + '</div>';
+  }).join('') + (rows.length > max ? L('<p class="muted small">… và ', '<p class="muted small">… and ') + (rows.length - max) + L(' cảnh báo khác</p>', ' more alerts</p>') : '');
+};
+UI.bindLinks = function (el) {
+  el.querySelectorAll('[data-link-route]').forEach(function (a) {
+    a.onclick = function () { App.go(a.dataset.linkRoute, { id: a.dataset.linkId }); };
+  });
+};
+
+/* ------------------------------ Nhật ký ------------------------------ */
+
+UI.activityList = function (rows, opts) {
+  opts = opts || {};
+  if (!rows || !rows.length) return L('<div class="empty">Chưa có thay đổi nào được ghi.</div>', '<div class="empty">No changes recorded yet.</div>');
+  var tone = { Create: 'ok', Update: 'blue', Delete: 'danger' };
+  var label = { Create: L('Thêm', 'Add'), Update: L('Sửa', 'Edit'), Delete: L('Xóa', 'Delete') };
+  return UI.table([
+    { key: 'time', label: L('Thời gian', 'Time'), render: function (r) { return '<span class="nowrap">' + Fmt.datetime(r.time) + '</span>'; } },
+    { key: 'email', label: L('Người sửa', 'User'), render: function (r) { return Fmt.esc(App.label('LSB_Staff', r.staffId) || r.email); } },
+    { key: 'action', label: L('Thao tác', 'Action'), render: function (r) { return UI.badge(label[r.action] || r.action, tone[r.action]); } },
+    { key: 'recordId', label: L('Bản ghi', 'Record'), render: function (r) {
+      return '<span class="id">' + Fmt.esc(r.recordId) + '</span><div class="small muted">' + Fmt.esc(App.tlabel(r.table)) + '</div>'; } },
+    { key: 'detail', label: L('Thay đổi', 'Changes'), render: function (r) { return UI.diffHtml(r); } }
+  ], rows, { empty: L('Chưa có thay đổi', 'No changes yet') });
+};
+
+UI.diffHtml = function (r) {
+  var d = r.detail;
+  if (!d) return '';
+  if (typeof d === 'string') return '<span class="diff">' + Fmt.esc(d) + '</span>';
+  var note = d._note ? '<div class="diff"><i>' + Fmt.esc(d._note) + '</i></div>' : '';
+  var ch = d.changes || d;
+  var keys = Object.keys(ch).filter(function (k) { return k !== '_note'; });
+  if (r.action === 'Create' || r.action === 'Delete') {
+    return note + '<span class="diff">' + keys.length + L(' cột · ', ' columns · ') + Fmt.esc(keys.slice(0, 6).join(', ')) + (keys.length > 6 ? '…' : '') + '</span>';
+  }
+  return note + keys.slice(0, 8).map(function (k) {
+    var v = ch[k] || ['', ''];
+    return '<div class="diff"><b>' + Fmt.esc(k) + '</b>: ' + Fmt.esc(v[0] === '' ? '∅' : v[0]) + ' → ' + Fmt.esc(v[1] === '' ? '∅' : v[1]) + '</div>';
+  }).join('') + (keys.length > 8 ? '<div class="diff">…</div>' : '');
+};
+
+/* ------------------- Trang dùng chung: Danh mục & Nhật ký ------------------- */
+
+App.pages.catalog = {
+  title: function (p) { var t = p.table || 'LSB_Staff'; return App.table(t) ? App.tlabel(t) : L('Danh mục', 'Catalog'); },
+  render: function (view, p) {
+    var table = p.table || 'LSB_Staff';
+    var def = App.table(table);
+    return App.api('record.list', { table: table }).then(function (res) {
+      var keys = def.columns.filter(function (c) { return !c.auto; }).map(function (c) { return c.name; });
+      view.innerHTML = '<div class="page-head"><div class="title"><h2>' + Fmt.esc(App.tlabel(table)) + '</h2><div class="muted small">' +
+        res.total + L(' dòng · sheet ', ' rows · sheet ') + table + (App.canWrite(table) ? '' : L(' · chỉ Admin được sửa', ' · only Admin can edit')) + '</div></div>' +
+        (App.canWrite(table) ? L('<button class="btn primary" id="add">+ Thêm</button>', '<button class="btn primary" id="add">+ Add</button>') : '') + '</div>' +
+        L('<div class="toolbar"><input id="q" placeholder="Tìm…" class="grow"></div><div id="list"></div>', '<div class="toolbar"><input id="q" placeholder="Search…" class="grow"></div><div id="list"></div>');
+      function draw() {
+        var q = view.querySelector('#q').value.toLowerCase();
+        var rows = res.rows.filter(function (r) { return !q || JSON.stringify(r).toLowerCase().indexOf(q) >= 0; });
+        var cols = UI.schemaCols(table, keys);
+        cols[0].render = function (r) { return Fmt.cell(cols[0].col, r[cols[0].key]) + UI.missingBadge(table, r); };
+        view.querySelector('#list').innerHTML = UI.table(cols, rows, {
+          onRow: function (r) { App.edit(table, r, { onSaved: App.reload, onDeleted: App.reload }); } });
+      }
+      view.querySelector('#q').addEventListener('input', draw);
+      var add = view.querySelector('#add');
+      if (add) add.onclick = function () { App.edit(table, {}, { onSaved: App.reload }); };
+      draw();
+    });
+  }
+};
+
+App.pages.activity = {
+  title: function () { return L('Nhật ký thay đổi', 'Change log'); },
+  render: function (view) {
+    var tables = App.boot.config.tables;
+    view.innerHTML = L('<div class="page-head"><div class="title"><h2>Nhật ký thay đổi</h2><div class="muted small">Mọi thao tác thêm / sửa / xóa qua app — sheet LSB_Activity_log</div></div></div>', '<div class="page-head"><div class="title"><h2>Change log</h2><div class="muted small">Every add / edit / delete made in the app — sheet LSB_Activity_log</div></div></div>') +
+      L('<div class="toolbar"><select id="t"><option value="">Tất cả bảng</option>', '<div class="toolbar"><select id="t"><option value="">All tables</option>') + Object.keys(tables).map(function (k) {
+        return '<option value="' + k + '">' + Fmt.esc(App.tlabel(k)) + '</option>'; }).join('') + '</select>' +
+      L('<select id="a"><option value="">Mọi thao tác</option><option value="Create">Thêm</option><option value="Update">Sửa</option><option value="Delete">Xóa</option></select>', '<select id="a"><option value="">All actions</option><option value="Create">Add</option><option value="Update">Edit</option><option value="Delete">Delete</option></select>') +
+      L('<input id="id" placeholder="Mã bản ghi (vd PJ-2026-001)"><button class="btn" id="go">Lọc</button></div><div class="card" id="list"></div>', '<input id="id" placeholder="Record ID (e.g. PJ-2026-001)"><button class="btn" id="go">Filter</button></div><div class="card" id="list"></div>');
+    function load() {
+      var box = view.querySelector('#list');
+      box.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+      App.api('activity.list', { table: view.querySelector('#t').value, action: view.querySelector('#a').value,
+        id: view.querySelector('#id').value.trim() }).then(function (res) {
+        box.innerHTML = '<div class="muted small" style="margin-bottom:8px">' + res.total + L(' dòng', ' rows') +
+          (res.total > res.rows.length ? L(' · hiển thị ', ' · showing ') + res.rows.length + L(' mới nhất', ' latest') : '') + '</div>' + UI.activityList(res.rows);
+      }).catch(App.fail);
+    }
+    view.querySelector('#go').onclick = load;
+    view.querySelector('#id').addEventListener('keydown', function (e) { if (e.key === 'Enter') load(); });
+    load();
+  }
+};
+
+App.pages.account = {
+  title: function () { return L('Tài khoản', 'Account'); },
+  render: function (view) {
+    var u = App.boot.user, caps = App.boot.caps, cfg = App.boot.config.app;
+    var yes = function (b) { return b ? UI.badge(L('Có', 'Yes'), 'ok') : UI.badge(L('Không', 'No')); };
+    view.innerHTML = '<div class="card"><h3>' + Fmt.esc(u.name) + '</h3>' + UI.info([
+      ['Email', Fmt.esc(u.email)], [L('Mã nhân sự', 'Staff ID'), '<span class="id">' + Fmt.esc(u.staffId) + '</span>'],
+      [L('Vai trò công việc', 'Job role'), Fmt.esc(u.jobRole)], [L('Quyền app', 'App access'), UI.badge(u.role, 'orange')]]) + '</div>' +
+      L('<div class="card"><h3>Quyền của bạn</h3>', '<div class="card"><h3>Your permissions</h3>') + UI.info([[L('Xem dữ liệu', 'View data'), yes(caps.read)], [L('Thêm / sửa', 'Add / edit'), yes(caps.write)],
+      [L('Xóa', 'Delete'), yes(caps.del)], [L('Sửa Nhân sự & Đầu việc chuẩn', 'Edit Staff & Standard tasks'), yes(caps.catalog)], [L('Xem nhật ký', 'View change log'), yes(caps.activity)]]) + '</div>' +
+      L('<div class="card"><h3>Ứng dụng</h3>', '<div class="card"><h3>Application</h3>') + UI.info([[L('Phiên bản', 'Version'), Fmt.esc(cfg.name + ' ' + cfg.version)], [L('Lược đồ dữ liệu', 'Data schema'), Fmt.esc(cfg.schema)],
+      [L('Module Đấu thầu', 'Bidding module'), cfg.modules.BIDDING ? UI.badge(L('Bật', 'On'), 'ok') : UI.badge(L('Tắt', 'Off'))],
+      [L('Module Báo giá', 'Quotation module'), cfg.modules.QUOTATION ? UI.badge(L('Bật', 'On'), 'ok') : UI.badge(L('Tắt', 'Off'))]]) + '</div>';
+  }
+};
+</script>

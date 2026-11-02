@@ -1,0 +1,236 @@
+<script>
+/**
+ * Project.html — Danh sách dự án + Dự án 360°.
+ * 360° gồm: chỉ số tài chính/tiến độ, thông tin HĐ, đầu việc, lô hàng, thanh toán (kế hoạch + đã thu),
+ * chi phí, bài học bàn giao, nhật ký thay đổi. Thêm/sửa bằng form tự sinh (UI.formModal).
+ * v2.4: badge + lọc "Thiếu dữ liệu".
+ */
+App.pages.projects = {
+  title: function () { return L('Dự án', 'Projects'); },
+  render: function (view, p) {
+    var f = { year: p.year || '', status: p.status || '', pm: p.pm || '', q: p.q || '', missing: !!p.missing };
+    return App.api('project.list', f).then(function (res) {
+      var staff = App.boot.lookups.LSB_Staff || [];
+      var years = {}; var y0 = new Date().getFullYear();
+      for (var y = y0 + 1; y >= y0 - 5; y--) years[y] = true;
+      view.innerHTML =
+        L('<div class="page-head"><div class="title"><h2>Dự án</h2><div class="muted small">', '<div class="page-head"><div class="title"><h2>Projects</h2><div class="muted small">') + res.total + L(' dự án</div></div>', ' projects</div></div>') +
+        (App.can('write') ? L('<button class="btn primary" id="add">+ Thêm dự án</button>', '<button class="btn primary" id="add">+ Add project</button>') : '') + '</div>' +
+        '<div class="toolbar">' +
+        L('<input id="q" placeholder="Tìm mã, tên dự án, khách hàng…" value="', '<input id="q" placeholder="Search ID, project name, customer…" value="') + Fmt.esc(f.q) + '" class="grow">' +
+        L('<select id="year"><option value="">Mọi năm</option>', '<select id="year"><option value="">All years</option>') + Object.keys(years).sort().reverse().map(function (y) {
+          return '<option' + (String(f.year) === y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select>' +
+        L('<select id="status"><option value="">Mọi trạng thái</option>', '<select id="status"><option value="">All statuses</option>') + (App.boot.config.lists.Project_status || []).map(function (s) {
+          return '<option' + (f.status === s ? ' selected' : '') + '>' + Fmt.esc(s) + '</option>'; }).join('') + '</select>' +
+        L('<select id="pm"><option value="">Mọi PM</option>', '<select id="pm"><option value="">All PMs</option>') + staff.map(function (s) {
+          return '<option value="' + s.id + '"' + (f.pm === s.id ? ' selected' : '') + '>' + Fmt.esc(s.label) + '</option>'; }).join('') + '</select>' +
+        '<label class="small"><input type="checkbox" id="miss"' + (f.missing ? ' checked' : '') + L('> Thiếu dữ liệu</label>', '> Incomplete</label>') +
+        '</div>' +
+        UI.table([
+          { key: 'Project_id', label: L('Mã', 'ID'), render: function (r) { return '<span class="id">' + Fmt.esc(r.Project_id) + '</span>' + UI.missingBadge('LSB_project', r) + '<div class="small muted">' + Fmt.esc(r.Project_code) + '</div>'; } },
+          { key: 'Project_name', label: L('Dự án / Khách hàng', 'Project / Customer'), render: function (r) { return '<b>' + Fmt.esc(r.Project_name) + '</b><div class="small muted">' + Fmt.esc(r.Customer_name) + '</div>'; } },
+          { key: 'Status', label: L('Trạng thái', 'Status'), render: function (r) { return UI.status(r.Status); } },
+          { key: 'PM_name', label: 'PM' },
+          { key: 'Contract_day', label: L('Ngày HĐ', 'Contract date'), render: function (r) { return Fmt.date(r.Contract_day); } },
+          { key: 'Contract_USD', label: L('HĐ (USD)', 'Contract (USD)'), num: true, render: function (r) { return Fmt.usd(r.Contract_USD); } },
+          { key: 'Collected_USD', label: L('Đã thu', 'Collected'), num: true, render: function (r) {
+            return Fmt.usd(r.Collected_USD) + (r.Overdue_USD > 0 ? '<div>' + UI.badge(L('quá hạn ', 'overdue ') + Fmt.compact(r.Overdue_USD), 'danger') + '</div>' : ''); } },
+          { key: 'GrossProfit_USD', label: L('Lãi gộp', 'Gross profit'), num: true, render: function (r) {
+            return Fmt.usd(r.GrossProfit_USD) + '<div class="small muted">' + (r.Contract_USD ? Fmt.pct(r.GrossProfit_USD / r.Contract_USD, 1) : '') + '</div>'; } },
+          { key: 'Shipped_ton', label: L('Tấn xuất', 'Tons shipped'), num: true, render: function (r) { return Fmt.num(r.Shipped_ton, 1) + ' / ' + Fmt.num(r.Tonnage_EST, 0); } },
+          { key: 'Tasks', label: L('Việc', 'Tasks'), num: true, render: function (r) {
+            return r.Tasks_done + '/' + r.Tasks + (r.Tasks_overdue ? ' ' + UI.badge(r.Tasks_overdue + L(' trễ', ' late'), 'danger') : ''); } }
+        ], res.rows, { empty: L('Không có dự án phù hợp', 'No matching projects'), onRow: function (r) { App.go('project', { id: r.Project_id }); } });
+
+      function apply() {
+        App.go('projects', { q: view.querySelector('#q').value.trim(), year: view.querySelector('#year').value,
+          status: view.querySelector('#status').value, pm: view.querySelector('#pm').value, missing: view.querySelector('#miss').checked }, { replace: true });
+      }
+      ['year', 'status', 'pm', 'miss'].forEach(function (id) { view.querySelector('#' + id).onchange = apply; });
+      view.querySelector('#q').addEventListener('keydown', function (e) { if (e.key === 'Enter') apply(); });
+      var add = view.querySelector('#add');
+      if (add) add.onclick = function () {
+        App.edit('LSB_project', {}, { defaults: { Status: 'Kick-off', RAD_Revision: 0 },
+          onSaved: function (r) { App.go('project', { id: r.Project_id }); } });
+      };
+    });
+  }
+};
+
+App.pages.project = {
+  title: function (p) { return L('Dự án ', 'Project ') + (p.id || ''); },
+  render: function (view, p) {
+    return App.api('project.get360', { id: p.id }).then(function (d) {
+      App.pages.project.draw(view, d, p);
+    });
+  },
+
+  draw: function (view, d, p) {
+    var pr = d.project, k = d.kpi, id = pr.Project_id;
+    var reload = function () {
+      App.api('project.get360', { id: id }).then(function (nd) { App.pages.project.draw(view, nd, { id: id, tab: UI.tabs._last }); }).catch(App.fail);
+    };
+    var canW = App.can('write');
+    var addBtn = function (table, label) { return canW ? '<button class="btn sm primary" data-add="' + table + '">+ ' + label + '</button>' : ''; };
+
+    view.innerHTML =
+      L('<div class="page-head"><div class="title"><div class="crumb"><a data-go="projects">Dự án</a> › ', '<div class="page-head"><div class="title"><div class="crumb"><a data-go="projects">Projects</a> › ') + Fmt.esc(id) + '</div>' +
+      '<h2>' + Fmt.esc(pr.Project_name || id) + ' ' + UI.status(pr.Status) + UI.missingBadge('LSB_project', pr) + '</h2>' +
+      '<div class="muted small">' + Fmt.esc(pr.Project_code || '') + (d.customer ? ' · ' + Fmt.esc(d.customer.Company_name) : '') +
+      (pr.PM_name ? ' · PM ' + Fmt.esc(pr.PM_name) : '') + '</div></div>' +
+      (canW ? L('<button class="btn" id="edit">Sửa dự án</button>', '<button class="btn" id="edit">Edit project</button>') : '') + '</div>' +
+      (pr.Status !== 'Closed' && !k.canClose ? L('<div class="note">Dự án chỉ được chuyển <b>Closed</b> khi có ít nhất 1 bài học bàn giao.</div>', '<div class="note">A project can only be set to <b>Closed</b> once it has at least 1 handover lesson.</div>') : '') +
+      UI.kpis([
+        { label: L('Giá trị HĐ', 'Contract value'), value: Fmt.usd(k.contractUSD) + ' USD', sub: pr.Contract_VND ? Fmt.compact(pr.Contract_VND) + ' VND' : '', tone: 'accent' },
+        { label: L('Đã thu', 'Collected'), value: Fmt.usd(k.collectedUSD), sub: k.contractUSD ? Fmt.pct(k.collectedUSD / k.contractUSD, 0) + L(' HĐ', ' of contract') : '', tone: 'ok' },
+        { label: L('Còn phải thu', 'Outstanding'), value: Fmt.usd(k.outstandingUSD), sub: k.overdueUSD > 0 ? L('<span style="color:var(--danger)">quá hạn ', '<span style="color:var(--danger)">overdue ') + Fmt.usd(k.overdueUSD) + '</span>' : '' },
+        { label: L('Chi phí', 'Costs'), value: Fmt.usd(k.costUSD) },
+        { label: L('Lãi gộp thực tế', 'Actual gross profit'), value: Fmt.usd(k.grossProfitUSD), sub: (k.grossMarginPct === null ? '' : Fmt.pct(k.grossMarginPct, 1)) +
+          (pr.Grossmargin_EST !== '' ? ' · KH ' + Fmt.pct(pr.Grossmargin_EST, 0) : ''), tone: k.grossProfitUSD < 0 ? 'danger' : '' },
+        { label: L('Tấn đã xuất', 'Tons shipped'), value: Fmt.num(k.shippedTon, 1), sub: L('dự kiến ', 'planned ') + Fmt.num(k.tonnageEST, 0) + (k.tonnageActual ? L(' · thực tế ', ' · actual ') + Fmt.num(k.tonnageActual, 0) : '') }
+      ]) +
+      '<div class="row"><div class="col"><div class="card">' +
+      UI.progress(L('Thu tiền', 'Collections'), k.collectedUSD, k.contractUSD, 'ok', Fmt.usd(k.collectedUSD) + ' / ' + Fmt.usd(k.contractUSD)) +
+      UI.progress(L('Xuất hàng (tấn)', 'Shipped (tons)'), k.shippedTon, k.tonnageEST || k.tonnageActual, 'orange') +
+      UI.progress(L('Đầu việc hoàn thành', 'Tasks completed'), k.tasksDone, k.tasks, '', k.tasksDone + '/' + k.tasks + (k.tasksOverdue ? ' · ' + k.tasksOverdue + L(' trễ', ' late') : '')) +
+      '</div></div></div>' +
+      '<div class="card" id="tabs"></div>';
+
+    view.querySelector('[data-go=projects]').onclick = function () { App.go('projects'); };
+    var eb = view.querySelector('#edit');
+    if (eb) eb.onclick = function () {
+      App.edit('LSB_project', pr, { onSaved: reload, onDeleted: function () { App.go('projects'); } });
+    };
+
+    var ctx = { project: id };
+    function editor(table) {
+      return function (r) { App.edit(table, r, { context: ctx, onSaved: reload, onDeleted: reload }); };
+    }
+    function bindAdd(el, defaults) {
+      el.querySelectorAll('[data-add]').forEach(function (b) {
+        b.onclick = function () {
+          var t = b.dataset.add;
+          var def = { Project_id: id };
+          if (defaults && defaults[t]) Object.keys(defaults[t]).forEach(function (x) { def[x] = defaults[t][x]; });
+          App.edit(t, {}, { defaults: def, context: ctx, onSaved: reload });
+        };
+      });
+    }
+    var q = d.quotation;
+    var tabs = [
+      { id: 'info', label: L('Thông tin', 'Details'), render: function (el) {
+        el.innerHTML = UI.info([
+          [L('Khách hàng', 'Customer'), d.customer ? Fmt.esc(d.customer.Company_name) + ' <span class="id">' + Fmt.esc(d.customer.Customer_id) + '</span>' : ''],
+          ['Lead', d.lead ? '<a data-lead="' + Fmt.esc(d.lead.Lead_id) + '">' + Fmt.esc(d.lead.Lead_id) + '</a>' : ''],
+          [L('Báo giá (Quotation_LSB-Code)', 'Quotation (Quotation_LSB-Code)'), q ? (q.linked ? '<a data-quote="' + Fmt.esc(q.code) + '">' + Fmt.esc(q.code) + '</a> ' + UI.status(q.status) +
+            '<div class="small muted">' + Fmt.esc([q.lsbCode, q.projectName, q.valueUSD ? Fmt.usd(q.valueUSD) + ' USD' : ''].filter(Boolean).join(' · ')) + '</div>'
+            : '<span class="id">' + Fmt.esc(q.code) + '</span>') + (q.note ? '<div class="small muted">' + Fmt.esc(q.note) + '</div>' : '') : ''],
+          [L('Dữ liệu dự án', 'Project data'), pr.URL_Project_data ? '<a href="' + Fmt.esc(pr.URL_Project_data) + L('" target="_blank" rel="noopener">Mở thư mục</a>', '" target="_blank" rel="noopener">Open folder</a>') : ''],
+          [L('Số hợp đồng', 'Contract no.'), Fmt.esc(pr.Contract_no)], ['Incoterm', Fmt.esc(pr.Incoterm)],
+          [L('Địa chỉ công trình', 'Site address'), Fmt.esc(pr.Project_address)], [L('Chủ đầu tư', 'Owner'), Fmt.esc(pr.Project_owner)],
+          [L('Tổng thầu', 'Main contractor'), Fmt.esc(pr.Project_Maincons)], [L('Tư vấn', 'Consultant'), Fmt.esc(pr.Project_Consultant)],
+          [L('Ngày HĐ', 'Contract date'), Fmt.date(pr.Contract_day)], ['Kick-off', Fmt.date(pr.Kickoff_day)],
+          [L('RAD (hạn giao)', 'RAD (required delivery)'), Fmt.date(pr.RAD_date) + (pr.RAD_Revision ? L(' · đổi ', ' · changed ') + pr.RAD_Revision + L(' lần', ' times') : '')],
+          [L('Bắt đầu lắp dựng', 'Installation start'), Fmt.date(pr.Installation_date_start)], [L('Bàn giao', 'Handover'), Fmt.date(pr.Project_handover)],
+          [L('Tấn dự kiến / thực tế', 'Tons planned / actual'), Fmt.num(pr.Tonnage_EST) + ' / ' + Fmt.num(pr.Tonnage_Actual)],
+          [L('Lãi gộp KH / TT (nhập)', 'Gross margin plan / actual (entered)'), Fmt.pct(pr.Grossmargin_EST, 1) + ' / ' + Fmt.pct(pr.Grossmargin_Actual, 1)],
+          [L('Năm / Quý', 'Year / Quarter'), Fmt.esc(pr.Year) + ' ' + Fmt.esc(pr.Quarter)]
+        ]);
+        var a = el.querySelector('[data-lead]');
+        if (a) a.onclick = function () { App.go('lead', { id: a.dataset.lead }); };
+        var qa = el.querySelector('[data-quote]');
+        if (qa) qa.onclick = function () { App.go('quotation', { id: qa.dataset.quote }); };
+      } },
+      { id: 'tasks', label: L('Đầu việc', 'Tasks'), count: d.tasks.length, render: function (el) {
+        el.innerHTML = L('<div class="card-head"><h3>Đầu việc dự án</h3>', '<div class="card-head"><h3>Project tasks</h3>') + addBtn('LSB_Project_task', L('Đầu việc', 'Tasks')) + '</div>' +
+          UI.table([
+            { key: 'Project_task_id', label: L('Mã', 'ID'), render: function (r) { return '<span class="id">' + r.Project_task_id + '</span>' + UI.missingBadge('LSB_Project_task', r); } },
+            { key: 'Task_duty', label: L('Đầu việc', 'Tasks'), render: function (r) { return Fmt.esc(r.Task_duty) + '<div class="small muted">' + Fmt.esc(r.Phase) + '</div>'; } },
+            { key: 'Owner_name', label: L('Phụ trách', 'Owner') },
+            { key: 'Start_day', label: L('Bắt đầu', 'Start'), render: function (r) { return Fmt.date(r.Start_day); } },
+            { key: 'Due_day', label: L('Hạn', 'Due'), render: function (r) { return Fmt.date(r.Due_day) + (r.Overdue ? ' ' + UI.badge(L('trễ', 'late'), 'danger') : ''); } },
+            { key: 'Done_day', label: 'Xong', render: function (r) { return Fmt.date(r.Done_day); } },
+            { key: 'Status', label: L('Trạng thái', 'Status'), render: function (r) { return UI.status(r.Status); } }
+          ], d.tasks, { empty: L('Chưa có đầu việc', 'No tasks yet'), onRow: editor('LSB_Project_task') });
+        bindAdd(el, { LSB_Project_task: { Status: 'Not started', Owner_id: App.boot.user.staffId } });
+      } },
+      { id: 'ship', label: L('Lô hàng', 'Shipments'), count: d.shipments.length, render: function (el) {
+        el.innerHTML = L('<div class="card-head"><h3>Lô hàng</h3>', '<div class="card-head"><h3>Shipments</h3>') + addBtn('LSB_shipment', L('Lô hàng', 'Shipments')) + '</div>' +
+          UI.table([
+            { key: 'Shipment_no', label: L('Lô', 'Lot'), render: function (r) { return '<b>' + Fmt.esc(r.Shipment_no) + '</b> <span class="id">' + r.Shipping_id + '</span>' + UI.missingBadge('LSB_shipment', r) + '<div class="small muted">' + Fmt.esc(r.Shipment_code) + '</div>'; } },
+            { key: 'Quantity_ton', label: L('Tấn', 'Tons'), num: true, render: function (r) { return Fmt.num(r.Quantity_ton, 1); } },
+            { key: 'Container', label: 'Cont KH/TT', num: true, render: function (r) { return Fmt.esc(r.Container_qty_plan) + ' / ' + Fmt.esc(r.Container_qty_actual); } },
+            { key: 'Fab', label: L('Sản xuất', 'Fabrication'), render: function (r) { return Fmt.date(r.Start_Fab) + ' → ' + Fmt.date(r.Completed_Fab); } },
+            { key: 'ETD', label: 'ETD KH / TT', render: function (r) {
+              return Fmt.date(r.ETD_plan) + ' / ' + (r.ETD_actual ? Fmt.date(r.ETD_actual) : L('<span class="muted">chưa</span>', '<span class="muted">not yet</span>')) +
+                (r.Delay_calc > 0 ? ' ' + UI.badge('+' + r.Delay_calc + L(' ngày', ' days'), 'danger') : ''); } },
+            { key: 'ETA', label: 'ETA KH / TT', render: function (r) { return Fmt.date(r.ETA_plan) + ' / ' + Fmt.date(r.ETA_actual); } },
+            { key: 'BL_no', label: L('Tàu / B/L', 'Vessel / B/L'), render: function (r) { return Fmt.esc(r.Vessel_no) + '<div class="small muted">' + Fmt.esc(r.BL_no) + '</div>'; } }
+          ], d.shipments, { empty: L('Chưa có lô hàng', 'No shipments yet'), onRow: editor('LSB_shipment') });
+        bindAdd(el);
+      } },
+      { id: 'pay', label: L('Thanh toán', 'Payments'), count: d.paymentPlans.length, render: function (el) {
+        el.innerHTML = L('<div class="card-head"><h3>Kế hoạch thanh toán</h3><span class="muted small">Tổng ', '<div class="card-head"><h3>Payment plan</h3><span class="muted small">Total ') + Fmt.pct(k.planPct, 0) + ' · ' +
+          Fmt.usd(k.planUSD) + ' USD</span>' + addBtn('LSB_payment_plan', L('Đợt thanh toán', 'Payment milestone')) + '</div>' +
+          UI.table([
+            { key: 'Payment_code', label: L('Đợt', 'Milestone'), render: function (r) { return '<b>' + Fmt.esc(r.Payment_code) + '</b> <span class="id">' + r.PaymentPlan_id + '</span>' + UI.missingBadge('LSB_payment_plan', r) +
+              (r.PP_revision ? '<div class="small muted">rev ' + Fmt.esc(r.PP_revision) + '</div>' : ''); } },
+            { key: 'Payment_pct', label: '%', num: true, render: function (r) { return Fmt.pct(r.Payment_pct, 0); } },
+            { key: 'Payment_USD', label: L('Số tiền', 'Amount'), num: true, render: function (r) { return Fmt.usd(r.Payment_USD); } },
+            { key: 'Collected_calc', label: L('Đã thu', 'Collected'), num: true, render: function (r) { return Fmt.usd(r.Collected_calc); } },
+            { key: 'Balance_calc', label: L('Còn lại', 'Balance'), num: true, render: function (r) { return Fmt.usd(r.Balance_calc); } },
+            { key: 'Due_day', label: L('Hạn', 'Due'), render: function (r) { return Fmt.date(r.Due_day); } },
+            { key: 'Status_calc', label: L('Trạng thái', 'Status'), render: function (r) { return UI.status(r.Status_calc); } },
+            { key: 'Shipping_id', label: L('Lô', 'Lot'), render: function (r) { return r.Shipping_id ? '<span class="id">' + r.Shipping_id + '</span>' : ''; } }
+          ], d.paymentPlans, { empty: L('Chưa có kế hoạch thanh toán', 'No payment plan yet'), onRow: editor('LSB_payment_plan') }) +
+          L('<div class="card-head" style="margin-top:18px"><h3>Tiền đã thu</h3>', '<div class="card-head" style="margin-top:18px"><h3>Payments received</h3>') +
+          (canW && d.paymentPlans.length ? L('<button class="btn sm primary" id="add-paid">+ Ghi nhận thu tiền</button>', '<button class="btn sm primary" id="add-paid">+ Record payment</button>') : '') + '</div>' +
+          UI.table([
+            { key: 'Paid_id', label: L('Mã', 'ID'), render: function (r) { return '<span class="id">' + r.Paid_id + '</span>' + UI.missingBadge('LSB_paid', r); } },
+            { key: 'Payment_code', label: L('Đợt', 'Milestone'), render: function (r) { return Fmt.esc(r.Payment_code) + ' <span class="id">' + r.PaymentPlan_id + '</span>'; } },
+            { key: 'Invoice_no', label: L('Hóa đơn', 'Invoice'), render: function (r) { return Fmt.esc(r.Invoice_no) + '<div class="small muted">' + Fmt.date(r.Invoice_day) + '</div>'; } },
+            { key: 'Paid_USD', label: 'USD', num: true, render: function (r) { return Fmt.usd(r.Paid_USD); } },
+            { key: 'Paid_VND', label: 'VND', num: true, render: function (r) { return Fmt.usd(r.Paid_VND); } },
+            { key: 'Payment_day', label: L('Ngày thu', 'Received on'), render: function (r) { return Fmt.date(r.Payment_day); } }
+          ], d.paid, { empty: L('Chưa thu', 'Nothing received yet'), onRow: editor('LSB_paid') });
+        bindAdd(el);
+        var ap = el.querySelector('#add-paid');
+        if (ap) ap.onclick = function () {
+          var open = d.paymentPlans.filter(function (x) { return x.Balance_calc > 0; })[0] || d.paymentPlans[0];
+          App.edit('LSB_paid', {}, { context: ctx, defaults: { PaymentPlan_id: open.PaymentPlan_id, Payment_day: App.boot.today }, onSaved: reload });
+        };
+      } },
+      { id: 'cost', label: L('Chi phí', 'Costs'), count: d.costs.length, render: function (el) {
+        el.innerHTML = L('<div class="card-head"><h3>Chi phí</h3><span class="muted small">Tổng ', '<div class="card-head"><h3>Costs</h3><span class="muted small">Total ') + Fmt.usd(k.costUSD) + ' USD</span>' + addBtn('LSB_cost', L('Chi phí', 'Costs')) + '</div>' +
+          UI.table([
+            { key: 'Cost_id', label: L('Mã', 'ID'), render: function (r) { return '<span class="id">' + r.Cost_id + '</span>' + UI.missingBadge('LSB_cost', r); } },
+            { key: 'Category', label: L('Nhóm', 'Category'), render: function (r) { return UI.badge(r.Category); } },
+            { key: 'Vendor', label: L('Nhà cung cấp', 'Vendor') },
+            { key: 'Cost_USD', label: 'USD', num: true, render: function (r) { return Fmt.usd(r.Cost_USD); } },
+            { key: 'Cost_VND', label: 'VND', num: true, render: function (r) { return Fmt.usd(r.Cost_VND); } },
+            { key: 'Invoice_code', label: 'Invoice_code', render: function (r) { return Fmt.date(r.Invoice_code); } },
+            { key: 'Payment_day', label: L('Ngày trả', 'Paid on'), render: function (r) { return Fmt.date(r.Payment_day); } },
+            { key: 'Cost_status', label: L('Trạng thái', 'Status'), render: function (r) { return UI.status(r.Cost_status); } }
+          ], d.costs, { empty: L('Chưa có chi phí', 'No costs yet'), onRow: editor('LSB_cost') });
+        bindAdd(el, { LSB_cost: { Cost_status: 'Planned' } });
+      } },
+      { id: 'lesson', label: L('Bài học', 'Lessons'), count: d.lessons.length, render: function (el) {
+        el.innerHTML = L('<div class="card-head"><h3>Bài học bàn giao</h3>', '<div class="card-head"><h3>Handover lessons</h3>') + addBtn('LSB_Project_handover_lesson', L('Bài học', 'Lessons')) + '</div>' +
+          UI.table([
+            { key: 'Lesson_id', label: L('Mã', 'ID'), render: function (r) { return '<span class="id">' + r.Lesson_id + '</span>' + UI.missingBadge('LSB_Project_handover_lesson', r) + '<div class="small muted">' + Fmt.date(r.Handover_day) + '</div>'; } },
+            { key: 'Phase', label: L('Giai đoạn / Nhóm', 'Phase / Category'), render: function (r) { return Fmt.esc(r.Phase) + '<div>' + UI.badge(r.Category) + '</div>'; } },
+            { key: 'Issue_description', label: L('Vấn đề → Nguyên nhân', 'Issue → Root cause'), render: function (r) { return Fmt.esc(r.Issue_description) + '<div class="small muted">' + Fmt.esc(r.Root_cause) + '</div>'; } },
+            { key: 'Action_next_project', label: L('Áp dụng dự án sau', 'Apply to next project') },
+            { key: 'Impact_USD', label: L('Ảnh hưởng', 'Impact'), num: true, render: function (r) { return Fmt.usd(r.Impact_USD) + (r.Impact_days ? '<div class="small muted">' + r.Impact_days + L(' ngày</div>', ' days</div>') : ''); } },
+            { key: 'Customer_feedback', label: L('Điểm KH', 'Customer score'), num: true }
+          ], d.lessons, { empty: L('Chưa có bài học — cần ít nhất 1 để đóng dự án', 'No lessons yet — at least 1 is needed to close the project'), onRow: editor('LSB_Project_handover_lesson') });
+        bindAdd(el, { LSB_Project_handover_lesson: { Recorded_by: App.boot.user.staffId } });   // Handover_day tự điền theo dự án (UI.AUTOFILL)
+      } }
+    ];
+    if (App.can('activity')) tabs.push({ id: 'log', label: L('Nhật ký', 'Change log'), count: d.activity.length, render: function (el) {
+      el.innerHTML = UI.activityList(d.activity);
+    } });
+    UI.tabs(view.querySelector('#tabs'), tabs, p.tab);
+  }
+};
+</script>
