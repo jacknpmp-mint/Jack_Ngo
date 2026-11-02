@@ -1,6 +1,6 @@
 # LSB_PSE06_CRMApps — Bàn giao context dự án LSB CRM / Bidding / Project
 
-*Cập nhật: 02/11/2026 (lần 8 — **Web App v2.7** = v2.6 (Dashboard 4 tab, bản trong skill mth-webapp-making `examples/lsb_v2.6`) + nhập tiền USD/VND linh động + bảng Quá hạn / Đến hạn thêm Mã DA + 2 cột VND; giao `LSB_PSE06_CRMApps_v2.7.zip` + `LSB_WebApp_v2.7_clasp.zip`; test 58/58 backend + 25/25 UI (3 lần), **chưa chạy trên Google thật**). Lần 7: **Web App v2.5 = v2.4 + song ngữ VN/EN**, giao `LSB_PSE06_CRMApps_v2.5.zip`; test mô phỏng 54/54 backend + 22/22 UI, **chưa chạy trên Google thật**). Lần 6: v2.4 (nháp form, mã dự kiến, bỏ bắt buộc). Lần 5: phỏng vấn yêu cầu v2.4. Lần 4: 30/09/2026 (Web App v2.3 chỉ quản lý dự án, DB v4.3_Project). Mở session mới: đính kèm file này + `LSB_PSE06_CRMApps_v2.3.zip` + `LSB_CRM_Bidding_Project_DB_v4.3_Project.xlsx`.*
+*Cập nhật: 02/11/2026 (lần 8 — **Web App v2.7 ĐÃ DEPLOY (phiên bản 3)** = v2.6 (Dashboard 4 tab, bản trong skill mth-webapp-making `examples/lsb_v2.6`) + nhập tiền USD/VND linh động + bảng Quá hạn / Đến hạn thêm Mã DA + 2 cột VND; giao `LSB_PSE06_CRMApps_v2.7.zip` + `LSB_WebApp_v2.7_clasp.zip`; test 58/58 backend + 25/25 UI (3 lần), **chưa chạy trên Google thật**). Lần 7: **Web App v2.5 = v2.4 + song ngữ VN/EN**, giao `LSB_PSE06_CRMApps_v2.5.zip`; test mô phỏng 54/54 backend + 22/22 UI, **chưa chạy trên Google thật**). Lần 6: v2.4 (nháp form, mã dự kiến, bỏ bắt buộc). Lần 5: phỏng vấn yêu cầu v2.4. Lần 4: 30/09/2026 (Web App v2.3 chỉ quản lý dự án, DB v4.3_Project). Mở session mới: đính kèm file này + `LSB_PSE06_CRMApps_v2.3.zip` + `LSB_CRM_Bidding_Project_DB_v4.3_Project.xlsx`.*
 
 ## 1. Mục tiêu
 
@@ -77,7 +77,9 @@ Script ID dự án đang chạy (từ người dùng) nằm trong `.clasp.json` 
 - Test: backend 59/59 (mock thêm CacheService + 1 ca bộ nhớ đệm), UI 25/25 ×2.
 - Đã clone lại kiểm chứng: 25/25 file khớp, `VERSION 2.7.0`.
 - Bản triển khai: `@2 - PSE06_Project Managemnt` (đang phục vụ người dùng) + `@HEAD`.
-- **Việc tiếp:** người dùng thử URL /dev → deploy.
+- **ĐÃ DEPLOY 02/11/2026:** bản triển khai `AKfycbwjUDt6…ZFA-wNdY7gVNAfmsY` (giữ URL) → **phiên bản 3** "v2.7 - Ma DA + VND bang cong no, nhap USD/VND hai chieu".
+  - Phiên bản 2 = v2.6 + bộ nhớ đệm, phiên bản 1 = bản đầu.
+  - Quay lại: `clasp deploy -i <mã triển khai> -V 2`.
 - **Rủi ro cần hỏi:** bộ đệm trình duyệt 2 phút có thể cho mở form sửa trên dữ liệu cũ → Lưu ghi đè thay đổi của người khác trong 2 phút đó.
 
 **Trạng thái:** v2.4 xong trong mô phỏng (52/52 backend, 20/20 UI Chromium). **Cần:** dán vào Apps Script và nghiệm thu bước 9–14 trên Google thật. Rủi ro còn lại: nháp dùng localStorage trong iframe của Apps Script (`*.googleusercontent.com`) — trình duyệt chặn lưu trữ bên thứ ba / ẩn danh thì không có nháp (form vẫn lưu bình thường).
